@@ -6,13 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B91037A02F2F7E480099D2B0 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = B910379F2F2F7E480099D2B0 /* FirebaseAnalytics */; };
+		B91037A22F2F7E480099D2B0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B91037A12F2F7E480099D2B0 /* FirebaseAuth */; };
+		B91037A42F2F7E480099D2B0 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B91037A32F2F7E480099D2B0 /* FirebaseFirestore */; };
+		B91037A62F2F7E480099D2B0 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = B91037A52F2F7E480099D2B0 /* FirebaseMessaging */; };
+		B91037A82F2F7E480099D2B0 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = B91037A72F2F7E480099D2B0 /* FirebaseStorage */; };
+		B91037DD2F30B8350099D2B0 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B91037DC2F30B8350099D2B0 /* GoogleSignIn */; };
+		B91037DF2F30B8350099D2B0 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B91037DE2F30B8350099D2B0 /* GoogleSignInSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B95BD2F62F2B7D200092E326 /* UzmanaGel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UzmanaGel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B91037E12F30B8670099D2B0 /* Exceptions for "UzmanaGel" folder in "UzmanaGel" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B95BD2F52F2B7D200092E326 /* UzmanaGel */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B95BD2F82F2B7D200092E326 /* UzmanaGel */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B91037E12F30B8670099D2B0 /* Exceptions for "UzmanaGel" folder in "UzmanaGel" target */,
+			);
 			path = UzmanaGel;
 			sourceTree = "<group>";
 		};
@@ -23,6 +46,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B91037A62F2F7E480099D2B0 /* FirebaseMessaging in Frameworks */,
+				B91037A02F2F7E480099D2B0 /* FirebaseAnalytics in Frameworks */,
+				B91037DF2F30B8350099D2B0 /* GoogleSignInSwift in Frameworks */,
+				B91037A22F2F7E480099D2B0 /* FirebaseAuth in Frameworks */,
+				B91037A82F2F7E480099D2B0 /* FirebaseStorage in Frameworks */,
+				B91037A42F2F7E480099D2B0 /* FirebaseFirestore in Frameworks */,
+				B91037DD2F30B8350099D2B0 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +95,13 @@
 			);
 			name = UzmanaGel;
 			packageProductDependencies = (
+				B910379F2F2F7E480099D2B0 /* FirebaseAnalytics */,
+				B91037A12F2F7E480099D2B0 /* FirebaseAuth */,
+				B91037A32F2F7E480099D2B0 /* FirebaseFirestore */,
+				B91037A52F2F7E480099D2B0 /* FirebaseMessaging */,
+				B91037A72F2F7E480099D2B0 /* FirebaseStorage */,
+				B91037DC2F30B8350099D2B0 /* GoogleSignIn */,
+				B91037DE2F30B8350099D2B0 /* GoogleSignInSwift */,
 			);
 			productName = UzmanaGel;
 			productReference = B95BD2F62F2B7D200092E326 /* UzmanaGel.app */;
@@ -94,6 +131,10 @@
 			);
 			mainGroup = B95BD2ED2F2B7D200092E326;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				B91037DB2F30B8350099D2B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B95BD2F72F2B7D200092E326 /* Products */;
 			projectDirPath = "";
@@ -251,16 +292,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = UzmanaGel/UzmanaGel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 29KA7NQK59;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UzmanaGel/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -283,16 +325,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = UzmanaGel/UzmanaGel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 29KA7NQK59;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UzmanaGel/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -332,6 +375,63 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.8.0;
+			};
+		};
+		B91037DB2F30B8350099D2B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B910379F2F2F7E480099D2B0 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		B91037A12F2F7E480099D2B0 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		B91037A32F2F7E480099D2B0 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		B91037A52F2F7E480099D2B0 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		B91037A72F2F7E480099D2B0 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B910379E2F2F7E480099D2B0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
+		B91037DC2F30B8350099D2B0 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B91037DB2F30B8350099D2B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		B91037DE2F30B8350099D2B0 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B91037DB2F30B8350099D2B0 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B95BD2EE2F2B7D200092E326 /* Project object */;
 }
