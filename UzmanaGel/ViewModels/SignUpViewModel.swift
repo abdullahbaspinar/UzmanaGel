@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 
 @MainActor
 final class SignUpViewModel: ObservableObject {
@@ -24,6 +25,8 @@ final class SignUpViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     @Published var didSignUp: Bool = false
+
+    private let userRepo = UserRepository()
 
     func signUp() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -66,22 +69,39 @@ final class SignUpViewModel: ObservableObject {
         Auth.auth().createUser(withEmail: trimmedEmail, password: password) { [weak self] result, error in
             guard let self = self else { return }
 
-            self.isLoading = false
-
             if let error = error {
+                self.isLoading = false
                 self.errorMessage = error.localizedDescription
                 return
             }
 
-            // ✅ Kullanıcı oluşturuldu (Firebase otomatik login yapar)
-            // Display name set etmek istersen:
-            if let user = result?.user {
-                let changeRequest = user.createProfileChangeRequest()
-                changeRequest.displayName = trimmedName
-                changeRequest.commitChanges { _ in }
+            guard let user = result?.user else {
+                self.isLoading = false
+                self.errorMessage = "Kullanıcı oluşturulamadı."
+                return
             }
 
-            self.didSignUp = true
+            // ✅ Display name set etmek istersen:
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = trimmedName
+            changeRequest.commitChanges { _ in }
+
+            // ✅ Firestore users/{uid} dokümanı oluştur
+            Task { @MainActor in
+                do {
+                    try await self.userRepo.createUserDocument(
+                        uid: user.uid,
+                        displayName: trimmedName,
+                        email: trimmedEmail,
+                        phoneNumber: trimmedPhone
+                    )
+                    self.isLoading = false
+                    self.didSignUp = true
+                } catch {
+                    self.isLoading = false
+                    self.errorMessage = error.localizedDescription
+                }
+            }
         }
     }
 
