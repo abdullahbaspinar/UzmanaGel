@@ -13,7 +13,29 @@ final class UserRepository {
 
     private let db = Firestore.firestore()
 
-    // 🔹 KULLANICI OLUŞTUR
+    // MARK: - Mükerrer Kontrol
+
+    func isEmailTaken(_ email: String) async throws -> Bool {
+        let snapshot = try await db.collection("users")
+            .whereField("email", isEqualTo: email.lowercased())
+            .limit(to: 1)
+            .getDocuments()
+        return !snapshot.documents.isEmpty
+    }
+
+    func isPhoneTaken(_ phone: String) async throws -> Bool {
+        let normalized = phone.filter(\.isNumber)
+        guard !normalized.isEmpty else { return false }
+
+        let snapshot = try await db.collection("users")
+            .whereField("phoneNumber", isEqualTo: normalized)
+            .limit(to: 1)
+            .getDocuments()
+        return !snapshot.documents.isEmpty
+    }
+
+    // MARK: - Kullanıcı Oluştur
+
     func createUserDocument(
         uid: String,
         displayName: String,
@@ -23,15 +45,16 @@ final class UserRepository {
 
         let data: [String: Any] = [
             "displayName": displayName,
-            "email": email,
-            "phoneNumber": phoneNumber ?? "",
+            "email": email.lowercased(),
+            "phoneNumber": phoneNumber?.filter(\.isNumber) ?? "",
             "createdAt": Timestamp(date: Date())
         ]
 
         try await db.collection("users").document(uid).setData(data, merge: true)
     }
 
-    // KULLANICI GETİR
+    // MARK: - Kullanıcı Getir
+
     func fetchUser(uid: String) async throws -> AppUser {
         let snap = try await db.collection("users").document(uid).getDocument()
         return try snap.data(as: AppUser.self)

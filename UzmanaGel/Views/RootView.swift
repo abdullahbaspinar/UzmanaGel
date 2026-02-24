@@ -16,12 +16,17 @@ struct RootView: View {
         Group {
             if !hasSeenOnboarding {
                 OnboardingView()
+            } else if session.isAuthenticated && session.isCheckingProfile {
+                ProgressView("Profil kontrol ediliyor...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color("BackgroundColor").ignoresSafeArea())
+            } else if session.isAuthenticated && session.needsProfileSetup {
+                CompleteProfileView()
+                    .environmentObject(session)
             } else if session.isAuthenticated {
                 Homepage()
             } else {
-                NavigationStack {
-                    LoginPage()
-                }
+                LoginPage()
             }
         }
     }

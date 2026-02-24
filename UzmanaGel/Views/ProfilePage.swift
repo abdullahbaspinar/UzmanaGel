@@ -266,7 +266,26 @@ struct ProfilePage: View {
                 .foregroundColor(.secondary)
 
             VStack(spacing: 0) {
-                settingsRow("key.shield", "Şifre Değiştir")
+                NavigationLink {
+                    ResetPasswordPage()
+                } label: {
+                    HStack {
+                        Image(systemName: "key.shield")
+                            .foregroundColor(Color("TertiaryColor"))
+                            .frame(width: 22)
+
+                        Text("Şifre Değiştir")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color("Text"))
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(14)
+                }
+                .buttonStyle(.plain)
             }
             .background(Color("CardBackground"))
             .clipShape(RoundedRectangle(cornerRadius: 14))

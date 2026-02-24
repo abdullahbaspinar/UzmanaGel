@@ -8,28 +8,55 @@
 import Foundation
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 
 @MainActor
 final class SessionViewModel: ObservableObject {
 
     @Published var isAuthenticated: Bool = false
     @Published var userId: String? = nil
+    @Published var needsProfileSetup: Bool = false
+    @Published var isCheckingProfile: Bool = false
 
     private var handle: AuthStateDidChangeListenerHandle?
+    private let userRepo = UserRepository()
 
     init() {
         startListening()
     }
 
     func startListening() {
-        // Firebase kullanıcı durumu değişince burası çalışır
         handle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
             Task { @MainActor in
-                self.isAuthenticated = (user != nil)
-                self.userId = user?.uid
+                if let user {
+                    self.isAuthenticated = true
+                    self.userId = user.uid
+                    await self.checkProfileCompletion(uid: user.uid)
+                } else {
+                    self.isAuthenticated = false
+                    self.userId = nil
+                    self.needsProfileSetup = false
+                }
             }
         }
+    }
+
+    private func checkProfileCompletion(uid: String) async {
+        isCheckingProfile = true
+        defer { isCheckingProfile = false }
+
+        do {
+            let user = try await userRepo.fetchUser(uid: uid)
+            let name = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            needsProfileSetup = name.isEmpty || name == "Telefon Kullanıcısı"
+        } catch {
+            needsProfileSetup = true
+        }
+    }
+
+    func profileCompleted() {
+        needsProfileSetup = false
     }
 
     func stopListening() {

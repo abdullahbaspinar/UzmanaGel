@@ -21,11 +21,16 @@ struct OTPView: View {
                     .font(.system(size: 22, weight: .bold))
                     .padding(.top, 10)
 
+                Text("+90 \(formatPhone(vm.phone10)) numarasına gönderilen 6 haneli kodu girin.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+
                 HStack(spacing: 10) {
                     Image(systemName: "number")
                         .foregroundColor(.secondary)
 
-                    TextField("123456", text: $vm.smsCode)
+                    TextField("6 haneli kod", text: $vm.smsCode)
                         .keyboardType(.numberPad)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -47,12 +52,33 @@ struct OTPView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
-                        .background(Color(.systemYellow))
+                        .background(Color("PrimaryColor"))
                         .cornerRadius(14)
                         .shadow(radius: 6, y: 3)
                 }
                 .buttonStyle(.plain)
+                .disabled(vm.isLoading || vm.smsCode.filter(\.isNumber).count != 6)
+                .opacity(vm.smsCode.filter(\.isNumber).count == 6 && !vm.isLoading ? 1 : 0.6)
                 .padding(.top, 10)
+
+                // Tekrar Kod Gönder
+                if vm.resendCountdown > 0 {
+                    Text("Tekrar kod gönder (\(vm.resendCountdown)s)")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                } else {
+                    Button {
+                        vm.resendCode()
+                    } label: {
+                        Text("Kodu Tekrar Gönder")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color("PrimaryColor"))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isLoading)
+                    .padding(.top, 8)
+                }
 
                 Spacer()
             }
@@ -69,13 +95,21 @@ struct OTPView: View {
                 }
             }
         }
+        .navigationTitle("Doğrulama")
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: vm.errorMessage) { _, msg in
             showError = (msg != nil)
         }
         .alert("Hata", isPresented: $showError) {
             Button("Tamam", role: .cancel) { vm.clearError() }
         } message: {
-            Text(vm.errorMessage ?? "Bilinmeyen hata")
+            Text(vm.errorMessage ?? "")
         }
+    }
+
+    private func formatPhone(_ raw: String) -> String {
+        let d = raw.filter(\.isNumber)
+        guard d.count == 10 else { return raw }
+        return "\(d.prefix(3)) \(d.dropFirst(3).prefix(3)) \(d.dropFirst(6).prefix(2)) \(d.dropFirst(8))"
     }
 }
