@@ -7,7 +7,6 @@
 
 import SwiftUI
 import FirebaseAuth
-import FirebaseFirestore
 
 struct ResetPasswordPage: View {
 
@@ -28,13 +27,6 @@ struct ResetPasswordPage: View {
     @State private var showAlert = false
     @State private var isSuccess = false
 
-    private var hasPasswordProvider: Bool {
-        guard let providers = Auth.auth().currentUser?.providerData else { return false }
-        return providers.contains { $0.providerID == "password" }
-    }
-
-    private var isSetPasswordMode: Bool { !hasPasswordProvider }
-
     var body: some View {
         ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
@@ -43,17 +35,23 @@ struct ResetPasswordPage: View {
                 VStack(spacing: 18) {
                     Spacer().frame(height: 28)
 
-                    headerSection
+                    VStack(spacing: 6) {
+                        Text("Şifre Değiştir")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
 
-                    if !isSetPasswordMode {
-                        passwordField(
-                            placeholder: "Mevcut şifre",
-                            text: $currentPassword,
-                            isVisible: $showCurrent
-                        )
-
-                        Divider().padding(.horizontal, 4)
+                        Text("Mevcut şifreni doğrula ve yeni şifreni belirle.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
+
+                    passwordField(
+                        placeholder: "Mevcut şifre",
+                        text: $currentPassword,
+                        isVisible: $showCurrent
+                    )
+
+                    Divider().padding(.horizontal, 4)
 
                     passwordField(
                         placeholder: "Yeni şifre",
@@ -68,20 +66,13 @@ struct ResetPasswordPage: View {
                     )
 
                     Button {
-                        Task {
-                            if isSetPasswordMode {
-                                await setNewPassword()
-                            } else {
-                                await changePassword()
-                            }
-                        }
+                        Task { await changePassword() }
                     } label: {
                         HStack(spacing: 8) {
                             if isLoading {
-                                ProgressView()
-                                    .tint(.white)
+                                ProgressView().tint(.white)
                             }
-                            Text(isSetPasswordMode ? "ŞİFRE BELİRLE" : "ŞİFREYİ GÜNCELLE")
+                            Text("ŞİFREYİ GÜNCELLE")
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(.white)
                         }
@@ -108,7 +99,7 @@ struct ResetPasswordPage: View {
                 .padding(.vertical, 24)
             }
         }
-        .navigationTitle(isSetPasswordMode ? "Şifre Belirle" : "Şifre Değiştir")
+        .navigationTitle("Şifre Değiştir")
         .navigationBarTitleDisplayMode(.inline)
         .alert(alertTitle, isPresented: $showAlert) {
             Button("Tamam") {
@@ -119,44 +110,14 @@ struct ResetPasswordPage: View {
         }
     }
 
-    // MARK: - Header
-
-    private var headerSection: some View {
-        VStack(spacing: 6) {
-            if isSetPasswordMode {
-                Image(systemName: "lock.badge.plus")
-                    .font(.system(size: 36))
-                    .foregroundColor(Color("PrimaryColor"))
-                    .padding(.bottom, 4)
-
-                Text("Şifre Belirle")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.primary)
-
-                Text("Telefon ile giriş yaptınız. E-posta ve şifre ile de giriş yapabilmek için bir şifre belirleyin.")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            } else {
-                Text("Şifre Değiştir")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.primary)
-
-                Text("Mevcut şifreni doğrula ve yeni şifreni belirle.")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
     // MARK: - Validation Messages
 
     private var validationMessages: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !isSetPasswordMode && !currentPassword.isEmpty && currentPassword.count < 6 {
+            if !currentPassword.isEmpty && currentPassword.count < 6 {
                 validationRow(
                     icon: "exclamationmark.circle.fill",
-                    text: "Mevcut şifreniz 6 karakterden kısa olamaz. Lütfen doğru şifrenizi girdiğinizden emin olun.",
+                    text: "Mevcut şifreniz 6 karakterden kısa olamaz.",
                     color: .red
                 )
             }
@@ -164,7 +125,7 @@ struct ResetPasswordPage: View {
             if !confirmPassword.isEmpty && newPassword != confirmPassword {
                 validationRow(
                     icon: "xmark.circle.fill",
-                    text: "Girdiğiniz şifreler birbiriyle eşleşmiyor. Lütfen her iki alana da aynı şifreyi yazdığınızdan emin olun.",
+                    text: "Girdiğiniz şifreler birbiriyle eşleşmiyor.",
                     color: .red
                 )
             } else if !confirmPassword.isEmpty && newPassword == confirmPassword {
@@ -175,10 +136,10 @@ struct ResetPasswordPage: View {
                 )
             }
 
-            if !isSetPasswordMode && newPassword == currentPassword && !newPassword.isEmpty && !currentPassword.isEmpty {
+            if newPassword == currentPassword && !newPassword.isEmpty && !currentPassword.isEmpty {
                 validationRow(
                     icon: "exclamationmark.triangle.fill",
-                    text: "Yeni şifreniz mevcut şifrenizle aynı olamaz. Güvenliğiniz için farklı bir şifre belirlemeniz gerekmektedir.",
+                    text: "Yeni şifreniz mevcut şifrenizle aynı olamaz.",
                     color: .orange
                 )
             }
@@ -186,7 +147,7 @@ struct ResetPasswordPage: View {
             if !newPassword.isEmpty && newPassword.count >= 6 && hasSequentialChars(newPassword) {
                 validationRow(
                     icon: "exclamationmark.triangle.fill",
-                    text: "Şifreniz ardışık karakterler içeriyor (ör: 123, abc). Daha güvenli bir şifre tercih edin.",
+                    text: "Şifreniz ardışık karakterler içeriyor (ör: 123, abc).",
                     color: .orange
                 )
             }
@@ -194,7 +155,7 @@ struct ResetPasswordPage: View {
             if !newPassword.isEmpty && hasRepeatingChars(newPassword) {
                 validationRow(
                     icon: "exclamationmark.triangle.fill",
-                    text: "Şifreniz tekrar eden karakterler içeriyor (ör: aaa, 111). Bu şifrenizi tahmin edilmeye karşı zayıflatır.",
+                    text: "Şifreniz tekrar eden karakterler içeriyor (ör: aaa, 111).",
                     color: .orange
                 )
             }
@@ -202,6 +163,7 @@ struct ResetPasswordPage: View {
     }
 
     // MARK: - Password Field
+
     private func passwordField(
         placeholder: String,
         text: Binding<String>,
@@ -239,7 +201,8 @@ struct ResetPasswordPage: View {
         .cornerRadius(14)
     }
 
-    // MARK: - Password Requirements View
+    // MARK: - Password Requirements
+
     private var passwordRequirementsView: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Şifre Gereksinimleri")
@@ -348,6 +311,7 @@ struct ResetPasswordPage: View {
     }
 
     // MARK: - Pattern Detection
+
     private func hasSequentialChars(_ str: String) -> Bool {
         let lowered = str.lowercased()
         let sequences = ["012", "123", "234", "345", "456", "567", "678", "789",
@@ -369,18 +333,16 @@ struct ResetPasswordPage: View {
     }
 
     // MARK: - Validation
+
     private var isValid: Bool {
-        if isSetPasswordMode {
-            return newPassword.count >= 6 && newPassword == confirmPassword
-        } else {
-            return !currentPassword.isEmpty &&
-                   newPassword.count >= 6 &&
-                   newPassword == confirmPassword &&
-                   newPassword != currentPassword
-        }
+        !currentPassword.isEmpty &&
+        newPassword.count >= 6 &&
+        newPassword == confirmPassword &&
+        newPassword != currentPassword
     }
 
     // MARK: - Alert Helpers
+
     private func showError(title: String, message: String, suggestion: String = "") {
         isSuccess = false
         alertTitle = title
@@ -397,77 +359,15 @@ struct ResetPasswordPage: View {
         showAlert = true
     }
 
-    // MARK: - İlk Kez Şifre Belirleme (Telefon Kullanıcısı)
-    private func setNewPassword() async {
-        guard let user = Auth.auth().currentUser else {
-            showError(
-                title: "Oturum Hatası",
-                message: "Aktif bir oturum bulunamadı.",
-                suggestion: "Uygulamadan çıkış yapıp tekrar giriş yapın."
-            )
-            return
-        }
+    // MARK: - Firebase Password Change
 
-        let email: String
-        if let authEmail = user.email, !authEmail.isEmpty {
-            email = authEmail
-        } else {
-            do {
-                let uid = user.uid
-                let db = Firestore.firestore()
-                let snap = try await db.collection("users").document(uid).getDocument()
-                let storedEmail = snap.data()?["email"] as? String ?? ""
-                guard !storedEmail.isEmpty else {
-                    showError(
-                        title: "E-posta Bulunamadı",
-                        message: "Şifre belirleyebilmek için hesabınıza bir e-posta adresi bağlı olmalıdır. Profil sayfanızdan e-posta adresinizi ekleyin.",
-                        suggestion: "Profil > İletişim Bilgileri bölümünden e-posta ekleyin ve tekrar deneyin."
-                    )
-                    return
-                }
-                email = storedEmail
-            } catch {
-                showError(
-                    title: "Bağlantı Hatası",
-                    message: "Kullanıcı bilgileri alınırken bir hata oluştu.",
-                    suggestion: "İnternet bağlantınızı kontrol edip tekrar deneyin."
-                )
-                return
-            }
-        }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        let credential = EmailAuthProvider.credential(withEmail: email, password: newPassword)
-
-        do {
-            try await user.link(with: credential)
-            showSuccess(
-                title: "Şifre Belirlendi ✓",
-                message: "Şifreniz başarıyla oluşturuldu. Artık \(email) e-posta adresiniz ve bu şifre ile de giriş yapabilirsiniz."
-            )
-        } catch {
-            mapLinkError(error)
-        }
-    }
-
-    // MARK: - Şifre Değiştirme (Mevcut Şifresi Olan Kullanıcı)
     private func changePassword() async {
-        guard let user = Auth.auth().currentUser else {
+        guard let user = Auth.auth().currentUser,
+              let email = user.email else {
             showError(
                 title: "Oturum Hatası",
-                message: "Aktif bir oturum bulunamadı.",
+                message: "Aktif bir oturum veya e-posta bulunamadı.",
                 suggestion: "Uygulamadan çıkış yapıp tekrar giriş yapın."
-            )
-            return
-        }
-
-        guard let email = user.email else {
-            showError(
-                title: "E-posta Bulunamadı",
-                message: "Hesabınıza bağlı bir e-posta adresi bulunamadı.",
-                suggestion: "Google veya Apple ile giriş yaptıysanız, ilgili hesap sağlayıcısının güvenlik ayarlarını kullanın."
             )
             return
         }
@@ -495,63 +395,8 @@ struct ResetPasswordPage: View {
         }
     }
 
-    // MARK: - Link Hataları (İlk Şifre Belirleme)
-    private func mapLinkError(_ error: Error) {
-        let code = (error as NSError).code
+    // MARK: - Error Mapping
 
-        switch code {
-        case AuthErrorCode.emailAlreadyInUse.rawValue:
-            showError(
-                title: "E-posta Kullanımda",
-                message: "Bu e-posta adresi zaten başka bir hesaba bağlı olduğu için şifre belirlenemiyor.",
-                suggestion: "Farklı bir e-posta adresi kullanmak için önce profil sayfasından e-posta adresinizi güncelleyin."
-            )
-
-        case AuthErrorCode.weakPassword.rawValue:
-            showError(
-                title: "Zayıf Şifre",
-                message: "Belirlediğiniz şifre güvenlik gereksinimlerini karşılamıyor. En az 6 karakter uzunluğunda olmalıdır.",
-                suggestion: "Büyük harf, küçük harf, rakam ve özel karakter kombinasyonu kullanın."
-            )
-
-        case AuthErrorCode.networkError.rawValue:
-            showError(
-                title: "Bağlantı Hatası",
-                message: "Sunucuyla iletişim kurulamadı.",
-                suggestion: "İnternet bağlantınızı kontrol edip tekrar deneyin."
-            )
-
-        case AuthErrorCode.requiresRecentLogin.rawValue:
-            showError(
-                title: "Oturum Süresi Doldu",
-                message: "Bu işlem için yakın zamanda giriş yapılmış olması gerekiyor.",
-                suggestion: "Uygulamadan çıkış yapıp tekrar telefon ile giriş yapın ve ardından hemen şifre belirleme işlemini gerçekleştirin."
-            )
-
-        case AuthErrorCode.providerAlreadyLinked.rawValue:
-            showError(
-                title: "Şifre Zaten Mevcut",
-                message: "Hesabınızda zaten bir e-posta/şifre bağlantısı bulunuyor.",
-                suggestion: "Şifrenizi değiştirmek istiyorsanız uygulamayı kapatıp tekrar açın."
-            )
-
-        case AuthErrorCode.invalidEmail.rawValue:
-            showError(
-                title: "Geçersiz E-posta",
-                message: "Hesabınıza kayıtlı e-posta adresi geçerli bir formatta değil.",
-                suggestion: "Profil sayfanızdan e-posta adresinizi düzeltin ve tekrar deneyin."
-            )
-
-        default:
-            showError(
-                title: "Beklenmeyen Hata",
-                message: "Şifre belirlenirken bir hata oluştu (Kod: \(code)).",
-                suggestion: "Lütfen tekrar deneyin. Sorun devam ederse destek ekibimize başvurun."
-            )
-        }
-    }
-
-    // MARK: - Firebase Şifre Değiştirme Hataları
     private enum ErrorPhase {
         case reauthentication
         case passwordUpdate
@@ -561,76 +406,55 @@ struct ResetPasswordPage: View {
         let code = (error as NSError).code
 
         switch code {
-        case AuthErrorCode.wrongPassword.rawValue:
+        case AuthErrorCode.wrongPassword.rawValue, AuthErrorCode.invalidCredential.rawValue:
             showError(
                 title: "Şifre Doğrulanamadı",
-                message: "Girdiğiniz mevcut şifre hesabınızdaki şifreyle eşleşmiyor.",
-                suggestion: "Şifrenizi hatırlamıyorsanız \"Şifremi Unuttum\" bağlantısını kullanarak sıfırlama e-postası alabilirsiniz."
+                message: "Girdiğiniz mevcut şifre hatalı.",
+                suggestion: "Şifrenizi hatırlamıyorsanız \"Şifremi Unuttum\" ile sıfırlayabilirsiniz."
             )
-
-        case AuthErrorCode.invalidCredential.rawValue:
-            showError(
-                title: "Kimlik Doğrulama Başarısız",
-                message: "Girdiğiniz mevcut şifre doğrulanamadı.",
-                suggestion: "Şifrenizin doğru olduğundan emin olun. Sorun devam ederse çıkış yapıp \"Şifremi Unuttum\" ile yeni şifre belirleyin."
-            )
-
         case AuthErrorCode.weakPassword.rawValue:
             showError(
                 title: "Zayıf Şifre",
-                message: "Yeni şifreniz güvenlik standartlarını karşılamıyor. En az 6 karakter olmalıdır.",
-                suggestion: "Büyük harf, küçük harf, rakam ve özel karakter kombinasyonu kullanın. Örnek: Uzm4n@Gel!"
+                message: "Yeni şifreniz güvenlik standartlarını karşılamıyor.",
+                suggestion: "Büyük/küçük harf, rakam ve özel karakter kombinasyonu kullanın."
             )
-
         case AuthErrorCode.requiresRecentLogin.rawValue:
             showError(
                 title: "Oturum Süresi Doldu",
                 message: "Bu işlem için yakın zamanda giriş yapılmış olması gerekiyor.",
-                suggestion: "Uygulamadan çıkış yapıp tekrar giriş yapın ve ardından hemen şifre değiştirin."
+                suggestion: "Çıkış yapıp tekrar giriş yapın ve hemen şifre değiştirin."
             )
-
         case AuthErrorCode.networkError.rawValue:
             showError(
                 title: "Bağlantı Hatası",
                 message: "Sunucuyla iletişim kurulamadı.",
-                suggestion: "Wi-Fi veya mobil veri bağlantınızı kontrol edip tekrar deneyin."
+                suggestion: "İnternet bağlantınızı kontrol edip tekrar deneyin."
             )
-
         case AuthErrorCode.tooManyRequests.rawValue:
             showError(
                 title: "Çok Fazla Deneme",
-                message: "Çok fazla başarısız deneme yapıldı. İşlem geçici olarak engellendi.",
+                message: "Çok fazla başarısız deneme yapıldı.",
                 suggestion: "En az 5 dakika bekleyip tekrar deneyin."
             )
-
         case AuthErrorCode.userDisabled.rawValue:
             showError(
                 title: "Hesap Askıya Alındı",
                 message: "Hesabınız devre dışı bırakılmış.",
                 suggestion: "destek@uzmanagel.com adresinden bize ulaşın."
             )
-
         case AuthErrorCode.internalError.rawValue:
             showError(
                 title: "Sunucu Hatası",
                 message: "Firebase sunucularında beklenmeyen bir hata oluştu.",
                 suggestion: "Birkaç dakika bekleyip tekrar deneyin."
             )
-
-        case AuthErrorCode.invalidUserToken.rawValue, AuthErrorCode.userTokenExpired.rawValue:
-            showError(
-                title: "Oturum Geçersiz",
-                message: "Oturum bilgileriniz geçerliliğini yitirmiş.",
-                suggestion: "Uygulamadan çıkış yapıp tekrar giriş yapın."
-            )
-
         default:
             let phaseText = phase == .reauthentication
                 ? "mevcut şifreniz doğrulanırken"
                 : "yeni şifreniz kaydedilirken"
             showError(
                 title: "Beklenmeyen Hata",
-                message: "Şifre değiştirme sırasında \(phaseText) bir hata oluştu (Kod: \(code)).",
+                message: "\(phaseText.capitalized) bir hata oluştu (Kod: \(code)).",
                 suggestion: "Tekrar deneyin. Sorun devam ederse destek ekibimize başvurun."
             )
         }

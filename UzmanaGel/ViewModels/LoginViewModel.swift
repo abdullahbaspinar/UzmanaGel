@@ -12,19 +12,23 @@ import GoogleSignIn
 import FirebaseCore
 
 @MainActor
-final class LoginViewModel : ObservableObject {
-    
-    //viewden gelen inputlar
-    @Published var email : String = ""
-    @Published var password : String = ""
-     
-    
-    //viewin yapacakları
-    @Published var isLoading : Bool = false
-    @Published var errorMessage : String? = nil
-    @Published var didLogin : Bool = false  //login başarılı mı
-    
+final class LoginViewModel: ObservableObject {
+
+    @Published var email: String = ""
+    @Published var password: String = ""
+
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+    @Published var didLogin: Bool = false
+
+    let attemptTracker = LoginAttemptTracker.shared
+
     func signInWithGoogle(presenting: UIViewController) {
+        guard !attemptTracker.isLocked else {
+            errorMessage = attemptTracker.lockMessage
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
@@ -38,10 +42,11 @@ final class LoginViewModel : ObservableObject {
         GIDSignIn.sharedInstance.configuration = config
 
         GIDSignIn.sharedInstance.signIn(withPresenting: presenting) { [weak self] result, error in
-            guard let self = self else { return }
+            guard let self else { return }
 
-            if let error = error {
+            if let error {
                 self.isLoading = false
+                self.attemptTracker.recordFailure()
                 self.errorMessage = error.localizedDescription
                 return
             }
@@ -61,67 +66,79 @@ final class LoginViewModel : ObservableObject {
             Auth.auth().signIn(with: credential) { _, error in
                 self.isLoading = false
 
-                if let error = error {
+                if let error {
+                    self.attemptTracker.recordFailure()
                     self.errorMessage = error.localizedDescription
                     return
                 }
 
+                self.attemptTracker.recordSuccess()
                 self.didLogin = true
             }
         }
     }
-    
-    
-    func login() {
-           let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
 
-           guard !trimmedEmail.isEmpty, !password.isEmpty else {
-               errorMessage = "E-posta ve şifre boş olamaz."
-               return
-           }
-        //firebase --login
-        
+    func login() {
+        guard !attemptTracker.isLocked else {
+            errorMessage = attemptTracker.lockMessage
+            return
+        }
+
+        let trimmedEmail = email
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !trimmedEmail.isEmpty, !password.isEmpty else {
+            errorMessage = "E-posta ve şifre boş olamaz."
+            return
+        }
+
         isLoading = true
         errorMessage = nil
+
         Auth.auth().signIn(withEmail: trimmedEmail, password: password) {
-            [weak self] result , error in guard let self else {return}
-            
+            [weak self] result, error in
+            guard let self else { return }
+
             self.isLoading = false
-            
-            if let error = error {
-                self.errorMessage = self.mapAuthError(error)
+
+            if let error {
+                self.attemptTracker.recordFailure()
+                self.errorMessage = self.attemptTracker.isLocked
+                    ? self.attemptTracker.lockMessage
+                    : self.mapAuthError(error)
                 return
             }
-            //başarılı ise
+
+            self.attemptTracker.recordSuccess()
             self.didLogin = true
         }
-        }
-    
-    private func mapAuthError(_ error: Error) -> String {
-     let nsError = error as NSError
-        let code = AuthErrorCode(rawValue: nsError.code)
-        
-        switch code {
-        case .userNotFound:
-                return "Bu e-posta ile kayıtlı kullanıcı bulunamadı"
-            case .wrongPassword:
-                return "Şifre hatalı. Tekrar deneyin."
-            case .invalidEmail:
-                return "E-posta formatı hatalı."
-            case .userDisabled:
-                return "Bu hesap devre dışı bırakılmış."
-            case .tooManyRequests:
-                return "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin."
-            case .networkError:
-                return "İnternet bağlantısı hatası. Bağlantını kontrol et."
-            default:
-                return "Giriş yapılamadı. Lütfen bilgilerini kontrol et."
-        }
-        
     }
-    func clearError(){
+
+    private func mapAuthError(_ error: Error) -> String {
+        let code = (error as NSError).code
+
+        switch code {
+        case AuthErrorCode.invalidCredential.rawValue:
+            return "E-posta veya şifre hatalı. Lütfen bilgilerinizi kontrol edip tekrar deneyin."
+        case AuthErrorCode.wrongPassword.rawValue:
+            return "Şifre hatalı. Lütfen tekrar deneyin."
+        case AuthErrorCode.userNotFound.rawValue:
+            return "Bu e-posta ile kayıtlı bir hesap bulunamadı."
+        case AuthErrorCode.invalidEmail.rawValue:
+            return "E-posta formatı hatalı. Lütfen geçerli bir e-posta adresi girin."
+        case AuthErrorCode.userDisabled.rawValue:
+            return "Bu hesap devre dışı bırakılmış. Destek ekibimizle iletişime geçin."
+        case AuthErrorCode.tooManyRequests.rawValue:
+            return "Firebase sunucusu çok fazla istek aldı. Lütfen birkaç dakika bekleyin."
+        case AuthErrorCode.networkError.rawValue:
+            return "İnternet bağlantısı kurulamadı. Bağlantınızı kontrol edip tekrar deneyin."
+        default:
+            return "Giriş yapılamadı (Kod: \(code)). Lütfen bilgilerinizi kontrol edin."
+        }
+    }
+
+    func clearError() {
         errorMessage = nil
     }
-    
-    
 }

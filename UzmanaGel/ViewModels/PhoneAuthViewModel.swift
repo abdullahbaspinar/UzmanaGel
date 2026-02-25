@@ -25,6 +25,8 @@ final class PhoneAuthViewModel: ObservableObject {
     private var verificationID: String?
     private var countdownTimer: Timer?
 
+    let attemptTracker = LoginAttemptTracker.shared
+
     // MARK: - Telefon Formatı
 
     private func formattedPhoneE164() -> String? {
@@ -36,6 +38,11 @@ final class PhoneAuthViewModel: ObservableObject {
     // MARK: - Kod Gönder
 
     func sendCode() {
+        guard !attemptTracker.isLocked else {
+            errorMessage = attemptTracker.lockMessage
+            return
+        }
+
         guard let e164 = formattedPhoneE164() else {
             errorMessage = "Telefon numarası 10 haneli olmalı ve 5 ile başlamalı.\n\nDoğru format: 5XXXXXXXXX\nÖrnek: 5551234567"
             return
@@ -121,6 +128,11 @@ final class PhoneAuthViewModel: ObservableObject {
     // MARK: - Kodu Doğrula
 
     func verifyCode() {
+        guard !attemptTracker.isLocked else {
+            errorMessage = attemptTracker.lockMessage
+            return
+        }
+
         let codeDigits = smsCode.filter(\.isNumber)
 
         guard codeDigits.count == 6 else {
@@ -147,7 +159,10 @@ final class PhoneAuthViewModel: ObservableObject {
             Task { @MainActor in
                 if let error {
                     self.isLoading = false
-                    self.errorMessage = self.mapVerifyCodeError(error)
+                    self.attemptTracker.recordFailure()
+                    self.errorMessage = self.attemptTracker.isLocked
+                        ? self.attemptTracker.lockMessage
+                        : self.mapVerifyCodeError(error)
                     return
                 }
 
@@ -157,6 +172,7 @@ final class PhoneAuthViewModel: ObservableObject {
                     return
                 }
 
+                self.attemptTracker.recordSuccess()
                 self.isLoading = false
                 self.didLogin = true
             }

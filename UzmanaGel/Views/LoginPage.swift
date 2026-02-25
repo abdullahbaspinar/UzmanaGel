@@ -132,11 +132,12 @@ struct LoginPage: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
-                            .background(Color(.systemYellow))
+                            .background(vm.attemptTracker.isLocked ? Color.gray : Color(.systemYellow))
                             .cornerRadius(14)
                             .shadow(radius: 6, y: 3)
                     }
                     .buttonStyle(.plain)
+                    .disabled(vm.attemptTracker.isLocked)
                     .padding(.top, 15)
 
                     // Divider
@@ -167,6 +168,8 @@ struct LoginPage: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .disabled(vm.attemptTracker.isLocked)
+                        .opacity(vm.attemptTracker.isLocked ? 0.4 : 1)
 
                         NavigationLink {
                             PhoneLoginView()
@@ -182,7 +185,8 @@ struct LoginPage: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .buttonStyle(.plain)
+                        .disabled(vm.attemptTracker.isLocked)
+                        .opacity(vm.attemptTracker.isLocked ? 0.4 : 1)
                     }
                     .padding(.top, 10)
 

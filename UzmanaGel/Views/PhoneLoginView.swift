@@ -53,13 +53,13 @@ struct PhoneLoginView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
-                        .background(Color("PrimaryColor"))
+                        .background(vm.attemptTracker.isLocked ? Color.gray : Color("PrimaryColor"))
                         .cornerRadius(14)
                         .shadow(radius: 6, y: 3)
                 }
                 .buttonStyle(.plain)
-                .disabled(vm.isLoading)
-                .opacity(vm.isLoading ? 0.6 : 1)
+                .disabled(vm.isLoading || vm.attemptTracker.isLocked)
+                .opacity(vm.isLoading || vm.attemptTracker.isLocked ? 0.6 : 1)
                 .padding(.top, 10)
 
                 Spacer()

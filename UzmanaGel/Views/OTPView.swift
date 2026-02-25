@@ -52,13 +52,13 @@ struct OTPView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
-                        .background(Color("PrimaryColor"))
+                        .background(vm.attemptTracker.isLocked ? Color.gray : Color("PrimaryColor"))
                         .cornerRadius(14)
                         .shadow(radius: 6, y: 3)
                 }
                 .buttonStyle(.plain)
-                .disabled(vm.isLoading || vm.smsCode.filter(\.isNumber).count != 6)
-                .opacity(vm.smsCode.filter(\.isNumber).count == 6 && !vm.isLoading ? 1 : 0.6)
+                .disabled(vm.isLoading || vm.attemptTracker.isLocked || vm.smsCode.filter(\.isNumber).count != 6)
+                .opacity(!vm.attemptTracker.isLocked && vm.smsCode.filter(\.isNumber).count == 6 && !vm.isLoading ? 1 : 0.6)
                 .padding(.top, 10)
 
                 // Tekrar Kod Gönder
