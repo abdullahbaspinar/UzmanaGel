@@ -213,12 +213,13 @@ struct LoginPage: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.orange)
 
-                            Button {
-                                print("uzman başvurusuna tıklanıd func buraya gelecek")
+                            NavigationLink {
+                                ExpertSignUpView()
                             } label: {
                                 Text("Başvuru Yap")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(.orange)
+                                    .underline()
                             }
                             .buttonStyle(.plain)
                         }
@@ -242,7 +243,7 @@ struct LoginPage: View {
                 }
             }
 
-            // ✅ Login başarılı olunca Home'a git (geri dönüş yok)
+            // Login başarılı olunca Home'a git (geri dönüş yok)
             .onChange(of: vm.didLogin) { _, newValue in
                 if newValue {
                     path = NavigationPath()
@@ -250,7 +251,7 @@ struct LoginPage: View {
                 }
             }
 
-            // ✅ ViewModel errorMessage değişince alert aç
+            // ViewModel errorMessage değişince alert aç
             .onChange(of: vm.errorMessage) { _, msg in
                 showError = (msg != nil)
             }
@@ -263,7 +264,7 @@ struct LoginPage: View {
                 Text(vm.errorMessage ?? "Bilinmeyen hata")
             }
 
-            // ✅ route tanımı
+            // route tanımı
             .navigationDestination(for: String.self) { value in
                 if value == "home" {
                     Homepage()

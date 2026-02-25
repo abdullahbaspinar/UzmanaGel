@@ -23,6 +23,9 @@ struct RootView: View {
             } else if session.isAuthenticated && session.needsProfileSetup {
                 CompleteProfileView()
                     .environmentObject(session)
+            } else if session.isAuthenticated && session.isExpert {
+                ExpertDashboardView()
+                    .environmentObject(session)
             } else if session.isAuthenticated {
                 Homepage()
             } else {

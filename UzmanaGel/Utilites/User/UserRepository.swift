@@ -59,4 +59,37 @@ final class UserRepository {
         let snap = try await db.collection("users").document(uid).getDocument()
         return try snap.data(as: AppUser.self)
     }
+
+    // MARK: - Uzman İşlemleri
+
+    func createExpertUserDocument(
+        uid: String,
+        displayName: String,
+        email: String,
+        phoneNumber: String
+    ) async throws {
+
+        let data: [String: Any] = [
+            "displayName": displayName,
+            "email": email.lowercased(),
+            "phoneNumber": phoneNumber.filter(\.isNumber),
+            "role": "expert",
+            "createdAt": Timestamp(date: Date())
+        ]
+
+        try await db.collection("users").document(uid).setData(data, merge: true)
+    }
+
+    func createExpertProfile(uid: String, profile: [String: Any]) async throws {
+        var data = profile
+        data["createdAt"] = Timestamp(date: Date())
+        data["status"] = "pending"
+
+        try await db.collection("expert_profiles").document(uid).setData(data, merge: true)
+    }
+
+    func fetchUserRole(uid: String) async throws -> String? {
+        let snap = try await db.collection("users").document(uid).getDocument()
+        return snap.data()?["role"] as? String
+    }
 }

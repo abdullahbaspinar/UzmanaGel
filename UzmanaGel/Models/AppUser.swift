@@ -17,5 +17,10 @@ struct AppUser: Codable, Identifiable {
     var email: String
     var phoneNumber: String?
     var photoURL: String?
+    var role: String?
     var createdAt: Timestamp?
+
+    var isExpert: Bool {
+        role == "expert"
+    }
 }

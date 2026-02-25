@@ -17,6 +17,9 @@ final class SessionViewModel: ObservableObject {
     @Published var userId: String? = nil
     @Published var needsProfileSetup: Bool = false
     @Published var isCheckingProfile: Bool = false
+    @Published var userRole: String = "user"
+
+    var isExpert: Bool { userRole == "expert" }
 
     private var handle: AuthStateDidChangeListenerHandle?
     private let userRepo = UserRepository()
@@ -37,6 +40,7 @@ final class SessionViewModel: ObservableObject {
                     self.isAuthenticated = false
                     self.userId = nil
                     self.needsProfileSetup = false
+                    self.userRole = "user"
                 }
             }
         }
@@ -50,8 +54,10 @@ final class SessionViewModel: ObservableObject {
             let user = try await userRepo.fetchUser(uid: uid)
             let name = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             needsProfileSetup = name.isEmpty || name == "Telefon Kullanıcısı"
+            userRole = user.role ?? "user"
         } catch {
             needsProfileSetup = true
+            userRole = "user"
         }
     }
 
