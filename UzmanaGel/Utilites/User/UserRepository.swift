@@ -8,7 +8,8 @@
 import Foundation
 import FirebaseFirestore
 
-
+/// Firestore bağlantısı: GoogleService-Info.plist içindeki Firebase projesi kullanılır.
+/// Database location (eur3 vb.) proje oluşturulurken Console'da seçilir; istemci aynı projeye bağlanır.
 final class UserRepository {
 
     private let db = Firestore.firestore()
@@ -83,9 +84,16 @@ final class UserRepository {
     func createExpertProfile(uid: String, profile: [String: Any]) async throws {
         var data = profile
         data["createdAt"] = Timestamp(date: Date())
-        data["status"] = "pending"
+        data["status"] = "Pending"
 
         try await db.collection("expert_profiles").document(uid).setData(data, merge: true)
+    }
+
+    /// Kayıtlı uzman profilini Firestore (expert_profiles) koleksiyonundan getirir.
+    func fetchExpertProfile(uid: String) async throws -> ExpertProfile? {
+        let snap = try await db.collection("expert_profiles").document(uid).getDocument()
+        guard snap.exists, let data = snap.data() else { return nil }
+        return try snap.data(as: ExpertProfile.self)
     }
 
     func fetchUserRole(uid: String) async throws -> String? {

@@ -243,13 +243,7 @@ struct LoginPage: View {
                 }
             }
 
-            // Login başarılı olunca Home'a git (geri dönüş yok)
-            .onChange(of: vm.didLogin) { _, newValue in
-                if newValue {
-                    path = NavigationPath()
-                    path.append("home")
-                }
-            }
+            // Giriş başarılı olunca RootView otomatik olarak ExpertHomepage veya Homepage gösterir (rol kontrolü orada).
 
             // ViewModel errorMessage değişince alert aç
             .onChange(of: vm.errorMessage) { _, msg in

@@ -40,6 +40,56 @@ struct ExpertProfile: Codable, Identifiable {
 
     var status: String
     var createdAt: Timestamp?
+
+    enum CodingKeys: String, CodingKey {
+        case displayName, email, phoneNumber, businessName, serviceCategories
+        case businessType, taxNumber, experienceYears, expertiseAreas, certificateURLs
+        case educationLevel, schoolName, status, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        email = try c.decodeIfPresent(String.self, forKey: .email) ?? ""
+        phoneNumber = try c.decodeIfPresent(String.self, forKey: .phoneNumber) ?? ""
+        businessName = try c.decodeIfPresent(String.self, forKey: .businessName) ?? ""
+        serviceCategories = try c.decodeIfPresent([String].self, forKey: .serviceCategories) ?? []
+        businessType = try c.decodeIfPresent(String.self, forKey: .businessType) ?? ""
+        taxNumber = try c.decodeIfPresent(String.self, forKey: .taxNumber)
+
+        if let intVal = try? c.decode(Int.self, forKey: .experienceYears) {
+            experienceYears = intVal
+        } else if let dblVal = try? c.decode(Double.self, forKey: .experienceYears) {
+            experienceYears = Int(dblVal)
+        } else {
+            experienceYears = 0
+        }
+
+        expertiseAreas = try c.decodeIfPresent([String].self, forKey: .expertiseAreas) ?? []
+        certificateURLs = try c.decodeIfPresent([String].self, forKey: .certificateURLs) ?? []
+        educationLevel = try c.decodeIfPresent(String.self, forKey: .educationLevel) ?? ""
+        schoolName = try c.decodeIfPresent(String.self, forKey: .schoolName) ?? ""
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "Pending"
+        createdAt = try c.decodeIfPresent(Timestamp.self, forKey: .createdAt)
+    }
+
+    init(id: String?, displayName: String, email: String, phoneNumber: String, businessName: String, serviceCategories: [String], businessType: String, taxNumber: String?, experienceYears: Int, expertiseAreas: [String], certificateURLs: [String], educationLevel: String, schoolName: String, status: String, createdAt: Timestamp?) {
+        self.id = id
+        self.displayName = displayName
+        self.email = email
+        self.phoneNumber = phoneNumber
+        self.businessName = businessName
+        self.serviceCategories = serviceCategories
+        self.businessType = businessType
+        self.taxNumber = taxNumber
+        self.experienceYears = experienceYears
+        self.expertiseAreas = expertiseAreas
+        self.certificateURLs = certificateURLs
+        self.educationLevel = educationLevel
+        self.schoolName = schoolName
+        self.status = status
+        self.createdAt = createdAt
+    }
 }
 
 struct ServiceCategory: Identifiable, Hashable {
