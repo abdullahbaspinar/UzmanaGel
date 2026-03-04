@@ -19,6 +19,11 @@ final class SessionViewModel: ObservableObject {
     @Published var isCheckingProfile: Bool = false
     @Published var userRole: String = "user"
 
+    /// Uzman başvuru akışındayken true; profil tamamlama yerine bu akışta kalınır.
+    @Published var isInExpertSignupFlow: Bool = false
+    /// Uzman başvuru ViewModel’i – akış boyunca aynı instance kullanılır (adım korunur).
+    var expertSignUpViewModel: ExpertSignUpViewModel?
+
     var isExpert: Bool { userRole == "expert" }
 
     private var handle: AuthStateDidChangeListenerHandle?
@@ -50,18 +55,59 @@ final class SessionViewModel: ObservableObject {
         isCheckingProfile = true
         defer { isCheckingProfile = false }
 
+        let isPhoneSignIn = isCurrentUserPhoneSignIn()
+
+        if isInExpertSignupFlow {
+            needsProfileSetup = false
+            userRole = "user"
+            return
+        }
+
         do {
             let user = try await userRepo.fetchUser(uid: uid)
             let name = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            needsProfileSetup = name.isEmpty || name == "Telefon Kullanıcısı"
             userRole = user.role ?? "user"
+            if userRole == "expert" {
+                needsProfileSetup = false
+            } else if isPhoneSignIn {
+                needsProfileSetup = name.isEmpty || name == "Telefon Kullanıcısı"
+            } else {
+                needsProfileSetup = false
+            }
         } catch {
-            needsProfileSetup = true
             userRole = "user"
+            needsProfileSetup = isPhoneSignIn
+        }
+    }
+
+    /// Giriş yapan kullanıcı sadece telefon ile mi giriş yaptı (ilk kez kayıt / profil tamamlanmamış telefon kullanıcısı).
+    private func isCurrentUserPhoneSignIn() -> Bool {
+        guard let user = Auth.auth().currentUser else { return false }
+        return user.providerData.contains { $0.providerID == "phone" }
+    }
+
+    /// Uzman başvuru ekranı açılmadan önce çağrılır; ViewModel oluşturulur ve akış başlar.
+    func startExpertSignup() {
+        expertSignUpViewModel = ExpertSignUpViewModel()
+        isInExpertSignupFlow = true
+    }
+
+    /// Uzman başvuru iptal/bitince çağrılır. İptalde çıkış yapılıp giriş sayfasına dönülür.
+    func clearExpertSignup(shouldSignOut: Bool = true) {
+        isInExpertSignupFlow = false
+        expertSignUpViewModel = nil
+        if shouldSignOut {
+            signOut()
         }
     }
 
     func profileCompleted() {
+        needsProfileSetup = false
+    }
+
+    /// Uzman başvurusu tamamlandığında çağrılır; RootView'ın ExpertHomepage göstermesi için rolü günceller.
+    func setUserRoleAsExpert() {
+        userRole = "expert"
         needsProfileSetup = false
     }
 

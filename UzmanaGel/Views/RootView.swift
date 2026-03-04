@@ -20,11 +20,15 @@ struct RootView: View {
                 ProgressView("Profil kontrol ediliyor...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color("BackgroundColor").ignoresSafeArea())
-            } else if session.isAuthenticated && session.needsProfileSetup {
-                CompleteProfileView()
+            } else if session.isAuthenticated && session.isInExpertSignupFlow,
+                      let vm = session.expertSignUpViewModel {
+                ExpertSignUpView(vm: vm)
                     .environmentObject(session)
             } else if session.isAuthenticated && session.isExpert {
                 ExpertHomepage()
+                    .environmentObject(session)
+            } else if session.isAuthenticated && session.needsProfileSetup {
+                CompleteProfileView()
                     .environmentObject(session)
             } else if session.isAuthenticated {
                 Homepage()

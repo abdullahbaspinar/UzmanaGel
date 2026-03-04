@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct LoginPage: View {
+    @EnvironmentObject private var session: SessionViewModel
     @StateObject private var vm = LoginViewModel()
 
     @State private var rememberMe = false
@@ -18,6 +19,8 @@ struct LoginPage: View {
 
     // Navigation stack control (geri dönüş olmaması için)
     @State private var path = NavigationPath()
+
+    private enum ExpertSignupDestination: Hashable { case flow }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -213,8 +216,9 @@ struct LoginPage: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.orange)
 
-                            NavigationLink {
-                                ExpertSignUpView()
+                            Button {
+                                session.startExpertSignup()
+                                path.append(ExpertSignupDestination.flow)
                             } label: {
                                 Text("Başvuru Yap")
                                     .font(.system(size: 13, weight: .bold))
@@ -263,6 +267,12 @@ struct LoginPage: View {
                 if value == "home" {
                     Homepage()
                         .navigationBarBackButtonHidden(true)
+                }
+            }
+            .navigationDestination(for: ExpertSignupDestination.self) { _ in
+                if let vm = session.expertSignUpViewModel {
+                    ExpertSignUpView(vm: vm)
+                        .environmentObject(session)
                 }
             }
         }

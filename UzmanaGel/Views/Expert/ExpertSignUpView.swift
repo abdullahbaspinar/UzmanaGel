@@ -3,12 +3,17 @@ import PhotosUI
 
 struct ExpertSignUpView: View {
 
-    @StateObject private var vm = ExpertSignUpViewModel()
+    @EnvironmentObject private var session: SessionViewModel
+    @ObservedObject var vm: ExpertSignUpViewModel
+
     @State private var showError = false
     @State private var showKvkkSheet = false
     @State private var hasReadKvkk = false
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
+    @State private var categorySearchText = ""
+    @State private var isCategoryPickerExpanded = false
+    @State private var showSmsVerificationSheet = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -55,6 +60,7 @@ struct ExpertSignUpView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
+                    session.clearExpertSignup(shouldSignOut: true)
                     dismiss()
                 } label: {
                     Image(systemName: "chevron.left")
@@ -64,15 +70,42 @@ struct ExpertSignUpView: View {
             }
         }
         .onChange(of: vm.errorMessage) { _, msg in
-            showError = (msg != nil)
+            if !showSmsVerificationSheet { showError = (msg != nil) }
+        }
+        .onChange(of: vm.didSendCode) { _, didSend in
+            if didSend && vm.currentStep == 1 && !vm.phoneVerified {
+                showSmsVerificationSheet = true
+            }
+        }
+        .onChange(of: vm.isLoading) { _, loading in
+            if vm.currentStep == 1 && loading && !vm.phoneVerified && !vm.didSendCode {
+                showSmsVerificationSheet = true
+            }
+        }
+        .onChange(of: vm.phoneVerified) { _, verified in
+            if verified { showSmsVerificationSheet = false }
+        }
+        .sheet(isPresented: $showSmsVerificationSheet) {
+            SmsVerificationSheetView(vm: vm, isPresented: $showSmsVerificationSheet)
         }
         .alert("Hata", isPresented: $showError) {
             Button("Tamam", role: .cancel) { vm.clearError() }
         } message: {
             Text(vm.errorMessage ?? "Bilinmeyen hata")
         }
+        .onAppear {
+            vm.setSession(session)
+        }
         .onChange(of: vm.didSignUp) { _, newValue in
-            if newValue { dismiss() }
+            if newValue {
+                session.clearExpertSignup(shouldSignOut: false)
+                dismiss()
+            }
+        }
+        .onDisappear {
+            if !vm.didSignUp {
+                session.clearExpertSignup(shouldSignOut: true)
+            }
         }
         .onChange(of: vm.certificatePickerItems) { _, _ in
             vm.loadCertificateImages()
@@ -175,7 +208,7 @@ private extension ExpertSignUpView {
 private extension ExpertSignUpView {
 
     var step1BasicInfo: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             inputField(icon: "person", placeholder: "Ad Soyad") {
                 TextField("Ad Soyad", text: $vm.fullName)
                     .textInputAutocapitalization(.words)
@@ -194,6 +227,8 @@ private extension ExpertSignUpView {
                     .keyboardType(.phonePad)
                     .autocorrectionDisabled()
             }
+
+            phoneVerificationSection
 
             passwordField
 
@@ -449,6 +484,156 @@ private extension ExpertSignUpView {
                 }
         }
     }
+
+    var phoneVerificationSection: some View {
+        Group {
+            if vm.phoneVerified {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.green)
+                    Text("Telefon numaranız doğrulandı")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(12)
+            }
+        }
+    }
+}
+
+// MARK: - SMS Doğrulama Sayfası (Açılır sayfa)
+
+struct SmsVerificationSheetView: View {
+    @ObservedObject var vm: ExpertSignUpViewModel
+    @Binding var isPresented: Bool
+
+    private func formattedPhone() -> String {
+        let digits = vm.phone.trimmingCharacters(in: .whitespacesAndNewlines).filter(\.isNumber)
+        guard digits.count == 10 else { return vm.phone }
+        return "+90 \(digits.prefix(3)) \(digits.dropFirst(3).prefix(3)) \(digits.suffix(4))"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color("BackgroundColor").ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    if !vm.didSendCode && vm.isLoading {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                            Text("SMS kodu gönderiliyor...")
+                                .font(.system(size: 15))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                    } else {
+                        Text("\(formattedPhone()) numarasına gönderilen 6 haneli kodu girin.")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+
+                    if vm.didSendCode || vm.errorMessage != nil {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "number")
+                                    .foregroundColor(.secondary)
+                                TextField("6 haneli kod", text: $vm.smsCode)
+                                    .keyboardType(.numberPad)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .onChange(of: vm.smsCode) { _, _ in vm.clearError() }
+                            }
+                            .padding(14)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color(white: 0, opacity: 0.08), lineWidth: 1)
+                            )
+
+                            if let error = vm.errorMessage {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.red)
+                                    Text(error)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.red)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(Color.red.opacity(0.08))
+                                .cornerRadius(10)
+                            }
+
+                            Button {
+                                vm.verifyPhoneCode()
+                            } label: {
+                                HStack {
+                                    if vm.isLoading {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    } else {
+                                        Text("Doğrula")
+                                    }
+                                }
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(vm.smsCode.filter(\.isNumber).count == 6 ? Color("PrimaryColor") : Color.gray)
+                                .cornerRadius(14)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(vm.smsCode.filter(\.isNumber).count != 6 || vm.isLoading)
+
+                            if vm.resendCountdown > 0 {
+                                Text("Tekrar kod gönder (\(vm.resendCountdown)s)")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Button {
+                                    vm.resendVerificationCode()
+                                } label: {
+                                    Text("Kodu tekrar gönder")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color("PrimaryColor"))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(vm.isLoading)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
+
+                    Spacer()
+                }
+                .padding(.top, 20)
+            }
+            .navigationTitle("SMS Doğrulama")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Kapat") {
+                        isPresented = false
+                    }
+                    .foregroundColor(Color("PrimaryColor"))
+                }
+            }
+        }
+        .onAppear {
+            vm.clearError()
+        }
+    }
 }
 
 // MARK: - Step 2: İşletme Bilgileri
@@ -511,59 +696,163 @@ private extension ExpertSignUpView {
     }
 
     var categorySelector: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Hizmet Kategorileri")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                Text("\(vm.selectedCategories.count) seçili")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color("PrimaryColor"))
-            }
-
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ], spacing: 8) {
-                ForEach(ServiceCategory.allCategories) { category in
-                    categoryChip(category)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isCategoryPickerExpanded.toggle()
+                    if !isCategoryPickerExpanded { categorySearchText = "" }
                 }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "chevron.down.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color("PrimaryColor"))
+                        .rotationEffect(.degrees(isCategoryPickerExpanded ? 180 : 0))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hizmet Kategorileri")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        Text(vm.selectedCategories.isEmpty
+                             ? "Kategori seçmek için dokunun"
+                             : "\(vm.selectedCategories.count) kategorisi seçildi")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    if !vm.selectedCategories.isEmpty {
+                        Text("\(vm.selectedCategories.count)")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color("PrimaryColor"))
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(14)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+
+            if isCategoryPickerExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14))
+
+                        TextField("Kategori ara...", text: $categorySearchText)
+                            .font(.system(size: 14))
+                            .autocorrectionDisabled()
+                    }
+                    .padding(12)
+                    .background(Color(.tertiarySystemBackground))
+                    .cornerRadius(10)
+
+                    if !vm.selectedCategories.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(Array(vm.selectedCategories).sorted(), id: \.self) { name in
+                                    HStack(spacing: 4) {
+                                        Text(name)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .lineLimit(1)
+
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                _ = vm.selectedCategories.remove(name)
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(Color(white: 1, opacity: 0.9))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color("PrimaryColor"))
+                                    .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 6) {
+                            ForEach(filteredCategories) { category in
+                                categoryRow(category)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .frame(maxHeight: 220)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color(white: 0, opacity: 0.06), lineWidth: 1)
+                )
+                .padding(.top, 8)
             }
         }
     }
 
-    func categoryChip(_ category: ServiceCategory) -> some View {
+    private var filteredCategories: [ServiceCategory] {
+        let query = categorySearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            return ServiceCategory.allCategories
+        }
+        return ServiceCategory.allCategories.filter {
+            $0.name.lowercased().contains(query)
+        }
+    }
+
+    func categoryRow(_ category: ServiceCategory) -> some View {
         let isSelected = vm.selectedCategories.contains(category.name)
 
         return Button {
             withAnimation(.easeInOut(duration: 0.2)) {
                 if isSelected {
-                    vm.selectedCategories.remove(category.name)
+                    _ = vm.selectedCategories.remove(category.name)
                 } else {
                     vm.selectedCategories.insert(category.name)
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 Image(systemName: category.icon)
-                    .font(.system(size: 13))
+                    .font(.system(size: 16))
+                    .foregroundColor(isSelected ? .white : Color("PrimaryColor"))
+                    .frame(width: 28, alignment: .center)
 
                 Text(category.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isSelected ? .white : .primary)
+                    .multilineTextAlignment(.leading)
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? .white : .secondary)
             }
-            .foregroundColor(isSelected ? .white : .primary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 42)
-            .background(isSelected ? Color("PrimaryColor") : Color(.secondarySystemBackground))
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(isSelected ? Color("PrimaryColor") : Color(.tertiarySystemBackground))
             .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.clear : Color.black.opacity(0.06), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }
@@ -912,6 +1201,9 @@ private extension ExpertSignUpView {
             }
 
             Button {
+                if vm.currentStep == 1 && !vm.phoneVerified && vm.isStep1FieldsFilled {
+                    showSmsVerificationSheet = true
+                }
                 vm.nextStep()
             } label: {
                 HStack(spacing: 6) {
@@ -929,11 +1221,27 @@ private extension ExpertSignUpView {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
-                .background(Color("TertiaryColor"))
+                .background(forwardButtonEnabled ? Color("TertiaryColor") : Color.gray)
                 .cornerRadius(14)
                 .shadow(radius: 6, y: 3)
             }
             .buttonStyle(.plain)
+            .disabled(!forwardButtonEnabled)
+        }
+    }
+
+    private var forwardButtonEnabled: Bool {
+        switch vm.currentStep {
+        case 1:
+            return vm.isStep1FieldsFilled
+        case 2:
+            return vm.isStep2Valid
+        case 3:
+            return vm.isStep3Valid
+        case 4:
+            return vm.isStep4Valid
+        default:
+            return true
         }
     }
 }
@@ -1025,6 +1333,7 @@ struct FlowLayout: Layout {
 
 #Preview {
     NavigationStack {
-        ExpertSignUpView()
+        ExpertSignUpView(vm: ExpertSignUpViewModel())
+            .environmentObject(SessionViewModel())
     }
 }

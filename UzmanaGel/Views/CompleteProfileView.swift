@@ -156,6 +156,16 @@ struct CompleteProfileView: View {
                     .opacity(isValid && !isLoading ? 1 : 0.6)
                     .padding(.top, 6)
 
+                    Button {
+                        session.profileCompleted()
+                    } label: {
+                        Text("Şimdi değil, ana sayfaya git")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 16)
+
                     Spacer().frame(height: 40)
                 }
                 .padding(.horizontal, 24)
