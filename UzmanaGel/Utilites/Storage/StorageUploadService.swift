@@ -160,4 +160,35 @@ final class StorageUploadService {
         let ref = storageRef(path: path, uid: uid)
         return try await putDataAndGetDownloadURL(data, ref: ref, contentType: "image/jpeg")
     }
+
+    /// Sertifika PDF veya diğer dosya; uid parametre ile (kayıt akışında).
+    func uploadCertificate(data: Data, fileExtension: String, uid: String) async throws -> String {
+        let ext = fileExtension.isEmpty ? "bin" : fileExtension.lowercased()
+        let filename = "\(UUID().uuidString).\(ext)"
+        let path = "certificates/\(uid)/\(filename)"
+        let ref = storageRef(path: path, uid: uid)
+        return try await putDataAndGetDownloadURL(data, ref: ref, contentType: contentType(for: ext))
+    }
+
+    /// Portföy fotoğrafı; portfolio/{uid}/{uuid}.jpg
+    func uploadPortfolio(image: UIImage, quality: CGFloat = 0.85, uid: String) async throws -> String {
+        guard let data = image.jpegData(compressionQuality: quality) else {
+            throw StorageUploadError.invalidData
+        }
+        let filename = "\(UUID().uuidString).jpg"
+        let path = "portfolio/\(uid)/\(filename)"
+        let ref = storageRef(path: path, uid: uid)
+        return try await putDataAndGetDownloadURL(data, ref: ref, contentType: "image/jpeg")
+    }
+
+    /// İlan görseli; listing_images/{uid}/{uuid}.jpg — ilan açma/düzenlemede kullanılır.
+    func uploadListingImage(image: UIImage, quality: CGFloat = 0.85, uid: String) async throws -> String {
+        guard let data = image.jpegData(compressionQuality: quality) else {
+            throw StorageUploadError.invalidData
+        }
+        let filename = "\(UUID().uuidString).jpg"
+        let path = "listing_images/\(uid)/\(filename)"
+        let ref = storageRef(path: path, uid: uid)
+        return try await putDataAndGetDownloadURL(data, ref: ref, contentType: "image/jpeg")
+    }
 }

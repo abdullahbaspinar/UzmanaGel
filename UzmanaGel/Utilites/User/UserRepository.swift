@@ -92,8 +92,13 @@ final class UserRepository {
     /// Kayıtlı uzman profilini Firestore (expert_profiles) koleksiyonundan getirir.
     func fetchExpertProfile(uid: String) async throws -> ExpertProfile? {
         let snap = try await db.collection("expert_profiles").document(uid).getDocument()
-        guard snap.exists, let data = snap.data() else { return nil }
+        guard snap.exists else { return nil }
         return try snap.data(as: ExpertProfile.self)
+    }
+
+    /// Uzman profilinde belirtilen alanları günceller (merge). Banka bilgileri vb. güvenle saklanır.
+    func updateExpertProfile(uid: String, fields: [String: Any]) async throws {
+        try await db.collection("expert_profiles").document(uid).setData(fields, merge: true)
     }
 
     func fetchUserRole(uid: String) async throws -> String? {

@@ -212,6 +212,11 @@ final class HomepageViewModel: ObservableObject {
         do {
             allServices = try await repo.fetchActiveServices()
             print("Yüklenen servis sayısı: \(allServices.count)")
+            // İlan fotoğrafı: servis dokümanındaki image URL varsa hemen kullan (anasayfada tıklanmadan görünsün)
+            for service in allServices {
+                guard !service.image.isEmpty, let url = URL(string: service.image) else { continue }
+                imageURLs[service.serviceId] = url
+            }
             loadAllImages()
         } catch {
             print("fetchServices hatası: \(error)")

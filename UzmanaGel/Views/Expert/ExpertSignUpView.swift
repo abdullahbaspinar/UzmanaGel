@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct ExpertSignUpView: View {
 
@@ -14,6 +15,9 @@ struct ExpertSignUpView: View {
     @State private var categorySearchText = ""
     @State private var isCategoryPickerExpanded = false
     @State private var showSmsVerificationSheet = false
+    @State private var showCertificatePDFImporter = false
+    @State private var showCameraForIdFront = false
+    @State private var showCameraForIdBack = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -88,6 +92,26 @@ struct ExpertSignUpView: View {
         .sheet(isPresented: $showSmsVerificationSheet) {
             SmsVerificationSheetView(vm: vm, isPresented: $showSmsVerificationSheet)
         }
+        .fullScreenCover(isPresented: $showCameraForIdFront) {
+            CameraImagePicker(
+                onImagePicked: {
+                    vm.idFrontImage = $0
+                    vm.idFrontPickerItem = nil
+                    showCameraForIdFront = false
+                },
+                onCancel: { showCameraForIdFront = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showCameraForIdBack) {
+            CameraImagePicker(
+                onImagePicked: {
+                    vm.idBackImage = $0
+                    vm.idBackPickerItem = nil
+                    showCameraForIdBack = false
+                },
+                onCancel: { showCameraForIdBack = false }
+            )
+        }
         .alert("Hata", isPresented: $showError) {
             Button("Tamam", role: .cancel) { vm.clearError() }
         } message: {
@@ -103,8 +127,8 @@ struct ExpertSignUpView: View {
             }
         }
         .onDisappear {
-            if !vm.didSignUp {
-                session.clearExpertSignup(shouldSignOut: true)
+            if !vm.didSignUp && !session.isAuthenticated {
+                session.clearExpertSignup(shouldSignOut: false)
             }
         }
         .onChange(of: vm.certificatePickerItems) { _, _ in
@@ -985,11 +1009,7 @@ private extension ExpertSignUpView {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.secondary)
 
-            Text("Sahip olduğunuz sertifikaların fotoğraflarını ekleyin.")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-
-            if !vm.certificateImages.isEmpty {
+            if !vm.certificateImages.isEmpty || !vm.certificatePDFs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(vm.certificateImages.indices, id: \.self) { index in
@@ -1011,31 +1031,89 @@ private extension ExpertSignUpView {
                                 .offset(x: 6, y: -6)
                             }
                         }
+                        ForEach(vm.certificatePDFs.indices, id: \.self) { index in
+                            ZStack(alignment: .topTrailing) {
+                                VStack(spacing: 6) {
+                                    Image(systemName: "doc.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(Color("PrimaryColor"))
+                                    Text("PDF \(index + 1)")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(width: 100, height: 100)
+                                .background(Color("PrimaryColor").opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                                Button {
+                                    vm.removeCertificatePDF(at: index)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.white)
+                                        .shadow(radius: 2)
+                                }
+                                .offset(x: 6, y: -6)
+                            }
+                        }
                     }
                 }
             }
 
-            PhotosPicker(
-                selection: $vm.certificatePickerItems,
-                maxSelectionCount: 10,
-                matching: .images
-            ) {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 16))
-                    Text("Sertifika Ekle")
-                        .font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 10) {
+                PhotosPicker(
+                    selection: $vm.certificatePickerItems,
+                    maxSelectionCount: 10,
+                    matching: .images
+                ) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 16))
+                        Text("Fotoğraf Ekle")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(Color("PrimaryColor"))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(Color("PrimaryColor").opacity(0.08))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color("PrimaryColor").opacity(0.3), lineWidth: 1)
+                    )
                 }
-                .foregroundColor(Color("PrimaryColor"))
-                .frame(maxWidth: .infinity)
-                .frame(height: 46)
-                .background(Color("PrimaryColor").opacity(0.08))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color("PrimaryColor").opacity(0.3), lineWidth: 1)
-                )
+
+                Button {
+                    showCertificatePDFImporter = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: 16))
+                        Text("PDF Ekle")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(Color("PrimaryColor"))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(Color("PrimaryColor").opacity(0.08))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color("PrimaryColor").opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
             }
+        }
+        .fileImporter(
+            isPresented: $showCertificatePDFImporter,
+            allowedContentTypes: [UTType.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first, url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            guard let data = try? Data(contentsOf: url) else { return }
+            vm.addCertificatePDF(data)
         }
     }
 }
@@ -1063,7 +1141,8 @@ private extension ExpertSignUpView {
                 icon: "creditcard",
                 image: vm.idFrontImage,
                 pickerSelection: $vm.idFrontPickerItem,
-                onRemove: { vm.idFrontImage = nil; vm.idFrontPickerItem = nil }
+                onRemove: { vm.idFrontImage = nil; vm.idFrontPickerItem = nil },
+                onCameraTap: { showCameraForIdFront = true }
             )
 
             idCardUpload(
@@ -1071,7 +1150,8 @@ private extension ExpertSignUpView {
                 icon: "creditcard.fill",
                 image: vm.idBackImage,
                 pickerSelection: $vm.idBackPickerItem,
-                onRemove: { vm.idBackImage = nil; vm.idBackPickerItem = nil }
+                onRemove: { vm.idBackImage = nil; vm.idBackPickerItem = nil },
+                onCameraTap: { showCameraForIdBack = true }
             )
 
             VStack(alignment: .leading, spacing: 8) {
@@ -1094,7 +1174,8 @@ private extension ExpertSignUpView {
         icon: String,
         image: UIImage?,
         pickerSelection: Binding<PhotosPickerItem?>,
-        onRemove: @escaping () -> Void
+        onRemove: @escaping () -> Void,
+        onCameraTap: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -1132,36 +1213,62 @@ private extension ExpertSignUpView {
                     .padding(8)
                 }
             } else {
-                PhotosPicker(selection: pickerSelection, matching: .images) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "camera.badge.ellipsis")
-                            .font(.system(size: 28))
-                            .foregroundColor(Color("PrimaryColor"))
-
-                        Text("Fotoğraf Seç")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color("PrimaryColor"))
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: pickerSelection, matching: .images) {
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 24))
+                                .foregroundColor(Color("PrimaryColor"))
+                            Text("Galeriden seç")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color("PrimaryColor"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 100)
+                        .background(Color("PrimaryColor").opacity(0.08))
+                        .cornerRadius(12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 130)
-                    .background(Color("PrimaryColor").opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color("PrimaryColor").opacity(0.25), style: StrokeStyle(lineWidth: 1.5, dash: [8]))
-                    )
+
+                    Button(action: onCameraTap) {
+                        VStack(spacing: 8) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(Color("PrimaryColor"))
+                            Text("Kamera ile çek")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color("PrimaryColor"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 100)
+                        .background(Color("PrimaryColor").opacity(0.08))
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
             if image != nil {
-                PhotosPicker(selection: pickerSelection, matching: .images) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(.system(size: 13))
-                        Text("Değiştir")
-                            .font(.system(size: 13, weight: .semibold))
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: pickerSelection, matching: .images) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 14))
+                            Text("Galeriden değiştir")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color("PrimaryColor"))
                     }
-                    .foregroundColor(Color("PrimaryColor"))
+
+                    Button(action: onCameraTap) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14))
+                            Text("Yeniden çek")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color("PrimaryColor"))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

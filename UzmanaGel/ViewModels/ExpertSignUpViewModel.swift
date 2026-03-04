@@ -43,6 +43,7 @@ final class ExpertSignUpViewModel: ObservableObject {
     @Published var schoolName = ""
     @Published var certificateImages: [UIImage] = []
     @Published var certificatePickerItems: [PhotosPickerItem] = []
+    @Published var certificatePDFs: [Data] = []
 
     // MARK: - Step 4: Kimlik Doğrulama
 
@@ -527,6 +528,15 @@ final class ExpertSignUpViewModel: ObservableObject {
         }
     }
 
+    func addCertificatePDF(_ data: Data) {
+        certificatePDFs.append(data)
+    }
+
+    func removeCertificatePDF(at index: Int) {
+        guard index < certificatePDFs.count else { return }
+        certificatePDFs.remove(at: index)
+    }
+
     // MARK: - Submit
 
     func submitApplication() {
@@ -646,6 +656,16 @@ final class ExpertSignUpViewModel: ObservableObject {
                 } catch {
                     isLoading = false
                     errorMessage = "Sertifika yüklenemedi: \(error.localizedDescription)"
+                    return
+                }
+            }
+            for pdfData in certificatePDFs {
+                do {
+                    let url = try await storageUpload.uploadCertificate(data: pdfData, fileExtension: "pdf", uid: uid)
+                    certificateURLs.append(url)
+                } catch {
+                    isLoading = false
+                    errorMessage = "Sertifika PDF yüklenemedi: \(error.localizedDescription)"
                     return
                 }
             }

@@ -297,9 +297,14 @@ private extension ServiceDetailPage {
 
             Spacer()
 
-            Text("₺\(price)")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color("Text"))
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("₺\(price)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color("Text"))
+                Text("başlangıç fiyatı")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -354,31 +359,63 @@ private extension ServiceDetailPage {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Color("Text"))
 
-            VStack(spacing: 14) {
-                HStack(spacing: 12) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color("PrimaryColor"))
-                        .frame(width: 24)
-
-                    Text("Hafta içi 09:00 - 18:00")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color("Text"))
-
-                    Spacer()
-                }
-
-                HStack(spacing: 12) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary)
-                        .frame(width: 24)
-
-                    Text("Pazar günleri kapalıdır")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-
-                    Spacer()
+            VStack(spacing: 12) {
+                if !vm.workingDaysDisplayNames.isEmpty || vm.workingHoursRangeText != nil {
+                    if let rangeText = vm.workingHoursRangeText, !rangeText.isEmpty {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color("PrimaryColor"))
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(rangeText)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(Color("Text"))
+                                if !vm.workingDaysDisplayNames.isEmpty {
+                                    Text(vm.workingDaysDisplayNames.joined(separator: ", "))
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            Spacer()
+                        }
+                    }
+                    if !vm.workingDaysDisplayNames.isEmpty && vm.workingHoursRangeText == nil {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color("PrimaryColor"))
+                                .frame(width: 24)
+                            Text(vm.workingDaysDisplayNames.joined(separator: ", "))
+                                .font(.system(size: 14))
+                                .foregroundColor(Color("Text"))
+                            Spacer()
+                        }
+                    }
+                    let closedDays = closedDaysText
+                    if !closedDays.isEmpty {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 18))
+                                .foregroundColor(.secondary)
+                                .frame(width: 24)
+                            Text(closedDays)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        Image(systemName: "clock.badge.questionmark")
+                            .font(.system(size: 18))
+                            .foregroundColor(.secondary)
+                            .frame(width: 24)
+                        Text("Çalışma saatleri henüz girilmemiş.")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
                 }
             }
             .padding(16)
@@ -387,6 +424,16 @@ private extension ServiceDetailPage {
             .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Kapalı günleri metin olarak döndürür (çalışılmayan günler). Sıra: Pzt→Paz.
+    private var closedDaysText: String {
+        let order = ["1", "2", "3", "4", "5", "6", "7"]
+        let names = ["1": "Pazartesi", "2": "Salı", "3": "Çarşamba", "4": "Perşembe", "5": "Cuma", "6": "Cumartesi", "7": "Pazar"]
+        let working = Set(vm.expertProfile?.workingDays ?? [])
+        let closed = order.filter { !working.contains($0) }.compactMap { names[$0] }
+        if closed.isEmpty { return "" }
+        return "Kapalı: \(closed.joined(separator: ", "))"
     }
 }
 
@@ -406,23 +453,35 @@ private extension ServiceDetailPage {
                     longitude: geo.longitude
                 )
 
-                mapView(coordinate: coordinate)
-
-                HStack(spacing: 8) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.orange)
-
-                    Text(vm.addressText.isEmpty ? vm.service.city : vm.addressText)
-                        .font(.system(size: 14))
-                        .foregroundColor(Color("Text"))
+                Button {
+                    vm.openDirections()
+                } label: {
+                    mapView(coordinate: coordinate)
                 }
+                .buttonStyle(.plain)
+
+                Button {
+                    vm.openDirections()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.orange)
+                        Text(vm.addressText.isEmpty ? vm.service.city : vm.addressText)
+                            .font(.system(size: 14))
+                            .foregroundColor(Color("Text"))
+                        Spacer()
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color("PrimaryColor"))
+                    }
+                }
+                .buttonStyle(.plain)
             } else if !vm.service.city.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.system(size: 20))
                         .foregroundColor(.orange)
-
                     Text(vm.service.city)
                         .font(.system(size: 14))
                         .foregroundColor(Color("Text"))

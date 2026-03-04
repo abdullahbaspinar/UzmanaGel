@@ -104,6 +104,105 @@ final class ServiceRepository {
         }.filter { $0.isActive }
     }
 
+    /// Uzmanın tüm ilanları (aktif + pasif); yönetim sayfası için.
+    func fetchAllServicesByProviderId(_ providerId: String) async throws -> [Service] {
+        guard !providerId.isEmpty else { return [] }
+        let snap = try await db.collection("services")
+            .whereField("providerId", isEqualTo: providerId)
+            .getDocuments()
+        return snap.documents.compactMap { doc -> Service? in
+            do {
+                var service = try doc.data(as: Service.self)
+                if service.serviceId.isEmpty {
+                    service.serviceId = doc.documentID
+                }
+                return service
+            } catch {
+                print("⚠️ Service decode hatası (\(doc.documentID)): \(error)")
+                return nil
+            }
+        }
+    }
+
+    /// İlanı siler (dokümanı kaldırır).
+    func deleteService(serviceId: String) async throws {
+        try await db.collection("services").document(serviceId).delete()
+    }
+
+    /// İlan alanlarını günceller (merge).
+    func updateService(serviceId: String, fields: [String: Any]) async throws {
+        try await db.collection("services").document(serviceId).setData(fields, merge: true)
+    }
+
+    // MARK: - Uzman ilan oluşturma
+
+    /// Uzman ilanı yayınla: services koleksiyonuna ekle, service_providers'ı güncelle.
+    /// Müşteri tarafında görünmesi için provider bilgisi service_providers'da olmalı.
+    func publishExpertListing(
+        providerId: String,
+        profile: ExpertProfile,
+        title: String,
+        category: String,
+        duration: String,
+        price: Int,
+        description: String,
+        city: String,
+        imageURL: String?
+    ) async throws -> String {
+        try await ensureExpertProvider(profile: profile, providerId: providerId)
+
+        let ref = db.collection("services").document()
+        let serviceId = ref.documentID
+        let image = imageURL ?? profile.profileImageURL ?? ""
+        let providerName = profile.businessName.isEmpty ? profile.displayName : profile.businessName
+        let finalCity = city.isEmpty ? (profile.serviceCities.first ?? "") : city
+
+        let data: [String: Any] = [
+            "serviceId": serviceId,
+            "title": title,
+            "category": category,
+            "duration": duration,
+            "providerId": providerId,
+            "isActive": true,
+            "price": price,
+            "providerName": providerName,
+            "city": finalCity,
+            "description": description,
+            "image": image,
+            "experienceYears": profile.experienceYears,
+            "rating": 0.0,
+            "isAvailable": true,
+            "isCertified": !profile.certificateURLs.isEmpty,
+            "acceptsCreditCard": false
+        ]
+
+        try await ref.setData(data)
+        return serviceId
+    }
+
+    /// Uzman profilini service_providers'a yazar; müşteri listesinde birleştirme çalışır. Konum (locationGeo) profildeki adresten gelir.
+    func ensureExpertProvider(profile: ExpertProfile, providerId: String) async throws {
+        let ref = db.collection("service_providers").document(providerId)
+        let city = profile.serviceCities.first ?? ""
+        var data: [String: Any] = [
+            "providerId": providerId,
+            "businessName": profile.businessName.isEmpty ? profile.displayName : profile.businessName,
+            "city": city,
+            "isActive": true,
+            "description": profile.about ?? "",
+            "image": profile.profileImageURL ?? "",
+            "phoneNumber": profile.phoneNumber,
+            "rating": 0.0,
+            "experienceYears": profile.experienceYears,
+            "isCertified": !profile.certificateURLs.isEmpty,
+            "acceptsCreditCard": false
+        ]
+        if let geo = profile.locationGeo {
+            data["locationGeo"] = geo
+        }
+        try await ref.setData(data, merge: true)
+    }
+
     // MARK: - Provider Fetch & Merge
 
     /// Provider ID listesiyle service_providers koleksiyonundan veri çek

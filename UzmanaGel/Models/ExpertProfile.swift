@@ -41,10 +41,44 @@ struct ExpertProfile: Codable, Identifiable {
     var status: String
     var createdAt: Timestamp?
 
+    /// Uzman profil fotoğrafı (Storage URL)
+    var profileImageURL: String?
+
+    // Çalışma detayları (profil tamamlama)
+    var serviceCities: [String]
+    /// Çalışılan günler: "1"=Pazartesi ... "7"=Pazar
+    var workingDays: [String]
+    var workingHoursStart: String?
+    var workingHoursEnd: String?
+    var minPrice: Int?
+    var maxPrice: Int?
+    var serviceType: String?
+
+    // Banka bilgileri (güvenli saklama – Firestore rules ile kısıtlanmalı)
+    var bankName: String?
+    var iban: String?
+    var accountHolderName: String?
+
+    /// Portföy: önceki işlerden fotoğraflar (Storage URL’leri)
+    var portfolioImageURLs: [String]
+
+    /// Adres (görüntüleme / iletişim)
+    var address: String?
+    /// Hakkında (kısa tanıtım metni)
+    var about: String?
+    /// Konum (harita / navigasyon için; adres kaydedilirken geocode ile doldurulur)
+    var locationGeo: GeoPoint?
+
     enum CodingKeys: String, CodingKey {
         case displayName, email, phoneNumber, businessName, serviceCategories
         case businessType, taxNumber, experienceYears, expertiseAreas, certificateURLs
         case educationLevel, schoolName, status, createdAt
+        case profileImageURL
+        case serviceCities, workingDays, workingHoursStart, workingHoursEnd, minPrice, maxPrice, serviceType
+        case bankName, iban, accountHolderName
+        case portfolioImageURLs
+        case address, about
+        case locationGeo
     }
 
     init(from decoder: Decoder) throws {
@@ -71,9 +105,26 @@ struct ExpertProfile: Codable, Identifiable {
         schoolName = try c.decodeIfPresent(String.self, forKey: .schoolName) ?? ""
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? "Pending"
         createdAt = try c.decodeIfPresent(Timestamp.self, forKey: .createdAt)
+        profileImageURL = try c.decodeIfPresent(String.self, forKey: .profileImageURL)
+        serviceCities = try c.decodeIfPresent([String].self, forKey: .serviceCities) ?? []
+        workingDays = try c.decodeIfPresent([String].self, forKey: .workingDays) ?? []
+        workingHoursStart = try c.decodeIfPresent(String.self, forKey: .workingHoursStart)
+        workingHoursEnd = try c.decodeIfPresent(String.self, forKey: .workingHoursEnd)
+        minPrice = try c.decodeIfPresent(Int.self, forKey: .minPrice)
+            ?? (try? c.decode(Double.self, forKey: .minPrice)).map(Int.init)
+        maxPrice = try c.decodeIfPresent(Int.self, forKey: .maxPrice)
+            ?? (try? c.decode(Double.self, forKey: .maxPrice)).map(Int.init)
+        serviceType = try c.decodeIfPresent(String.self, forKey: .serviceType)
+        bankName = try c.decodeIfPresent(String.self, forKey: .bankName)
+        iban = try c.decodeIfPresent(String.self, forKey: .iban)
+        accountHolderName = try c.decodeIfPresent(String.self, forKey: .accountHolderName)
+        portfolioImageURLs = try c.decodeIfPresent([String].self, forKey: .portfolioImageURLs) ?? []
+        address = try c.decodeIfPresent(String.self, forKey: .address)
+        about = try c.decodeIfPresent(String.self, forKey: .about)
+        locationGeo = try c.decodeIfPresent(GeoPoint.self, forKey: .locationGeo)
     }
 
-    init(id: String?, displayName: String, email: String, phoneNumber: String, businessName: String, serviceCategories: [String], businessType: String, taxNumber: String?, experienceYears: Int, expertiseAreas: [String], certificateURLs: [String], educationLevel: String, schoolName: String, status: String, createdAt: Timestamp?) {
+    init(id: String?, displayName: String, email: String, phoneNumber: String, businessName: String, serviceCategories: [String], businessType: String, taxNumber: String?, experienceYears: Int, expertiseAreas: [String], certificateURLs: [String], educationLevel: String, schoolName: String, status: String, createdAt: Timestamp?, profileImageURL: String? = nil, serviceCities: [String] = [], workingDays: [String] = [], workingHoursStart: String? = nil, workingHoursEnd: String? = nil, minPrice: Int? = nil, maxPrice: Int? = nil, serviceType: String? = nil, bankName: String? = nil, iban: String? = nil, accountHolderName: String? = nil, portfolioImageURLs: [String] = [], address: String? = nil, about: String? = nil, locationGeo: GeoPoint? = nil) {
         self.id = id
         self.displayName = displayName
         self.email = email
@@ -89,7 +140,60 @@ struct ExpertProfile: Codable, Identifiable {
         self.schoolName = schoolName
         self.status = status
         self.createdAt = createdAt
+        self.profileImageURL = profileImageURL
+        self.serviceCities = serviceCities
+        self.workingDays = workingDays
+        self.workingHoursStart = workingHoursStart
+        self.workingHoursEnd = workingHoursEnd
+        self.minPrice = minPrice
+        self.maxPrice = maxPrice
+        self.serviceType = serviceType
+        self.bankName = bankName
+        self.iban = iban
+        self.accountHolderName = accountHolderName
+        self.portfolioImageURLs = portfolioImageURLs
+        self.address = address
+        self.about = about
+        self.locationGeo = locationGeo
     }
+
+    /// Admin tarafından onaylanmış mı
+    var isApproved: Bool {
+        let s = status.lowercased()
+        return s == "approved" || s == "onaylandı"
+    }
+
+    /// İlan açabilmek için profil %100 dolu ve başvuru onaylanmış olmalı. 22 alan (adres, hakkında dahil).
+    var profileCompletionPercentage: Int {
+        var filled = 0
+        let total = 22
+        if !displayName.isEmpty { filled += 1 }
+        if !email.isEmpty { filled += 1 }
+        if !phoneNumber.isEmpty { filled += 1 }
+        if !businessName.isEmpty { filled += 1 }
+        if !serviceCategories.isEmpty { filled += 1 }
+        if !businessType.isEmpty { filled += 1 }
+        if experienceYears > 0 { filled += 1 }
+        if !expertiseAreas.isEmpty { filled += 1 }
+        if !educationLevel.isEmpty { filled += 1 }
+        if !schoolName.isEmpty { filled += 1 }
+        if !serviceCities.isEmpty { filled += 1 }
+        if !workingDays.isEmpty { filled += 1 }
+        if let s = workingHoursStart, !s.isEmpty { filled += 1 }
+        if let e = workingHoursEnd, !e.isEmpty { filled += 1 }
+        if minPrice != nil { filled += 1 }
+        if maxPrice != nil { filled += 1 }
+        if let t = serviceType, !t.isEmpty { filled += 1 }
+        if let b = bankName, !b.isEmpty { filled += 1 }
+        if let i = iban, !i.isEmpty { filled += 1 }
+        if let a = accountHolderName, !a.isEmpty { filled += 1 }
+        if let addr = address, !addr.isEmpty { filled += 1 }
+        if let ab = about, !ab.isEmpty { filled += 1 }
+        return min(100, (filled * 100) / total)
+    }
+
+    /// Profil %100 dolu ve admin onayı almışsa uzman ilan açabilir.
+    var canOpenListing: Bool { profileCompletionPercentage >= 100 && isApproved }
 }
 
 struct ServiceCategory: Identifiable, Hashable {

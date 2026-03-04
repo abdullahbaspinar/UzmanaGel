@@ -189,6 +189,9 @@ struct Homepage: View {
             .task {
                 vm.load()
             }
+            .refreshable {
+                vm.load()
+            }
             .toolbarBackground(Color("PrimaryColor"), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)

@@ -122,7 +122,7 @@ struct ServiceCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(Color("TertiaryColor"))
 
-                    Text("’den başlayan")
+                    Text("başlangıç fiyatı")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                 }

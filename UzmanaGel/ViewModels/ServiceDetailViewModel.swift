@@ -15,11 +15,14 @@ final class ServiceDetailViewModel: ObservableObject {
     @Published var addressText: String = ""
     @Published var isFavorite: Bool
     @Published var isLoading = false
+    /// Uzmanın çalışma saatleri / günleri (expert_profiles'tan; müşteri tarafında gösterilir)
+    @Published var expertProfile: ExpertProfile?
 
     let service: Service
 
     private let serviceRepo = ServiceRepository()
     private let favRepo = FavoritesRepository()
+    private let userRepo = UserRepository()
 
     // MARK: - Init
 
@@ -47,6 +50,27 @@ final class ServiceDetailViewModel: ObservableObject {
 
             isLoading = false
         }
+    }
+
+    /// Uzmanın çalışma günlerini Türkçe kısa isimle döndürür (workingDays: "1"=Pazartesi ... "7"=Pazar). Sıra: Pzt→Paz.
+    var workingDaysDisplayNames: [String] {
+        let order = ["1", "2", "3", "4", "5", "6", "7"]
+        let map: [String: String] = [
+            "1": "Pazartesi", "2": "Salı", "3": "Çarşamba", "4": "Perşembe",
+            "5": "Cuma", "6": "Cumartesi", "7": "Pazar"
+        ]
+        let days = expertProfile?.workingDays ?? []
+        return order.filter { days.contains($0) }.map { map[$0] ?? $0 }
+    }
+
+    var workingHoursRangeText: String? {
+        guard let profile = expertProfile else { return nil }
+        let start = profile.workingHoursStart?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let end = profile.workingHoursEnd?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if start.isEmpty && end.isEmpty { return nil }
+        if start.isEmpty { return end.isEmpty ? nil : "– \(end)" }
+        if end.isEmpty { return start }
+        return "\(start) – \(end)"
     }
 
     func toggleFavorite() {
@@ -84,40 +108,33 @@ final class ServiceDetailViewModel: ObservableObject {
         }
     }
 
+    /// Portföy: uzmanın expert_profiles.portfolioImageURLs değerini kullan; tüm ilanlarda aynı portföy gösterilir.
     private func fetchGalleryImages() async {
-        let folderRef = Storage.storage().reference()
-            .child("service_images/\(service.serviceId)")
+        if !service.image.isEmpty, let url = URL(string: service.image) {
+            coverImageURL = url
+        }
 
+        guard !service.providerId.isEmpty else { return }
         do {
-            let result = try await folderRef.listAll()
-            var urls: [URL] = []
-            for item in result.items {
-                if let url = try? await item.downloadURL() {
-                    urls.append(url)
-                }
-            }
+            guard let profile = try await userRepo.fetchExpertProfile(uid: service.providerId) else { return }
+            expertProfile = profile
+            let urls = profile.portfolioImageURLs.compactMap { URL(string: $0) }
             galleryURLs = urls
-
             if coverImageURL == nil, let first = urls.first {
                 coverImageURL = first
             }
         } catch {
-            print("📷 Galeri yüklenemedi: \(error.localizedDescription)")
+            print("📷 Portföy yüklenemedi: \(error.localizedDescription)")
         }
     }
 
     private func loadCoverImage() {
-        let folderRef = Storage.storage().reference()
-            .child("service_images/\(service.serviceId)")
-
-        folderRef.list(maxResults: 1) { [weak self] result, error in
-            guard let item = result?.items.first else { return }
-            item.downloadURL { [weak self] url, _ in
-                guard let url else { return }
-                DispatchQueue.main.async {
-                    self?.coverImageURL = url
-                }
-            }
+        if !service.image.isEmpty, let url = URL(string: service.image) {
+            coverImageURL = url
+            return
+        }
+        if let first = galleryURLs.first {
+            coverImageURL = first
         }
     }
 
