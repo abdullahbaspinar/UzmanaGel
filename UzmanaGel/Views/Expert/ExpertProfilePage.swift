@@ -11,6 +11,7 @@ import UIKit
 import CoreLocation
 import FirebaseStorage
 import FirebaseFirestore
+import UniformTypeIdentifiers
 
 // MARK: - Tasarım sabitleri
 
@@ -34,6 +35,7 @@ struct ExpertProfilePage: View {
     @State private var isLoading = true
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var isUploadingPhoto = false
+    @State private var isSubmittingForApproval = false
 
     var body: some View {
         Group {
@@ -227,6 +229,10 @@ struct ExpertProfilePage: View {
     private func completionBlock(profile: ExpertProfile) -> some View {
         let pct = profile.profileCompletionPercentage
         let isComplete = profile.canOpenListing
+        let statusLower = profile.status.lowercased()
+        let isDraft = statusLower == "draft" || statusLower.isEmpty
+        let isPending = statusLower == "pending" || statusLower == "beklemede"
+
         return VStack(spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -236,7 +242,7 @@ struct ExpertProfilePage: View {
                     Text("%\(pct)")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.primary)
-                    Text("İlan açmak için %100 olmalı")
+                    Text(pct >= 100 ? (isComplete ? "İlan açabilirsiniz" : (isPending ? "Onay bekleniyor" : "Onay için gönderin")) : "İlan açmak için %100 olmalı")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(.secondary)
                 }
@@ -280,8 +286,66 @@ struct ExpertProfilePage: View {
                 .padding(14)
                 .background(Color.green.opacity(0.12))
                 .cornerRadius(12)
+            } else if pct >= 100 && isPending {
+                HStack(spacing: 10) {
+                    Image(systemName: "clock.badge.checkmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(.orange)
+                    Text("Başvurunuz inceleniyor. Onaylandıktan sonra ilan açabileceksiniz.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(12)
+            } else if pct >= 100 && isDraft {
+                Button {
+                    Task { await submitForApproval() }
+                } label: {
+                    HStack(spacing: 10) {
+                        if isSubmittingForApproval {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 16))
+                            Text("İncelemeye gönder")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color("PrimaryColor"))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmittingForApproval)
             }
         }
+    }
+
+    private func submitForApproval() async {
+        guard !userId.isEmpty else { return }
+        isSubmittingForApproval = true
+        defer { isSubmittingForApproval = false }
+        do {
+            try await userRepo.submitExpertForApproval(uid: userId)
+            await loadProfile()
+            await onRefresh()
+        } catch {
+            // Hata durumunda kullanıcıya göstermek için state eklenebilir
+        }
+    }
+
+    private func isBusinessProfessionalFilled(_ profile: ExpertProfile) -> Bool {
+        !profile.businessName.isEmpty
+            && !profile.serviceCategories.isEmpty
+            && !profile.businessType.isEmpty
+            && profile.experienceYears >= 0
+            && !profile.educationLevel.isEmpty
+            && !profile.schoolName.isEmpty
     }
 
     private func sectionList(profile: ExpertProfile) -> some View {
@@ -294,12 +358,12 @@ struct ExpertProfilePage: View {
             VStack(spacing: ProfileDesign.rowSpacing) {
                 sectionRow(
                     icon: "person.text.rectangle.fill",
-                    title: "Kişisel ve iş bilgileri",
-                    subtitle: "Ad, iletişim, işletme, eğitim",
+                    title: "İşletme ve profesyonel bilgiler",
+                    subtitle: "Şirket/şahıs, kategori, deneyim, vergi no, sertifika",
                     color: Color("PrimaryColor"),
-                    isFilled: true
+                    isFilled: isBusinessProfessionalFilled(profile)
                 ) {
-                    ExpertPersonalInfoView(profile: profile)
+                    ExpertBusinessProfessionalEditPage(userId: userId, profile: profile, onSave: { Task { await loadProfile(); await onRefresh() } })
                 }
 
                 sectionRow(
@@ -330,6 +394,16 @@ struct ExpertProfilePage: View {
                     isFilled: !(profile.address ?? "").isEmpty && !(profile.about ?? "").isEmpty
                 ) {
                     ExpertAddressAboutPage(userId: userId, profile: profile, onSave: { Task { await loadProfile(); await onRefresh() } })
+                }
+
+                sectionRow(
+                    icon: "person.text.rectangle.fill",
+                    title: "Kimlik doğrulama",
+                    subtitle: "Kimlik belgesi ön ve arka yüz",
+                    color: Color("PrimaryColor"),
+                    isFilled: !(profile.idFrontURL ?? "").isEmpty && !(profile.idBackURL ?? "").isEmpty
+                ) {
+                    ExpertIdVerificationPage(userId: userId, profile: profile, onSave: { Task { await loadProfile(); await onRefresh() } })
                 }
 
                 sectionRow(
@@ -584,6 +658,291 @@ struct ExpertAddressAboutPage: View {
     }
 }
 
+// MARK: - Kimlik doğrulama (ön ve arka yüz)
+
+struct ExpertIdVerificationPage: View {
+    let userId: String
+    let profile: ExpertProfile
+    var onSave: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    private let userRepo = UserRepository()
+    private let storageUpload = StorageUploadService()
+
+    @State private var idFrontImage: UIImage?
+    @State private var idBackImage: UIImage?
+    @State private var idFrontPickerItem: PhotosPickerItem?
+    @State private var idBackPickerItem: PhotosPickerItem?
+    @State private var showCameraFront = false
+    @State private var showCameraBack = false
+    @State private var clearedFront = false
+    @State private var clearedBack = false
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    private var effectiveFrontURL: String? {
+        if clearedFront { return nil }
+        return profile.idFrontURL
+    }
+    private var effectiveBackURL: String? {
+        if clearedBack { return nil }
+        return profile.idBackURL
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Kimlik belgenizin ön ve arka yüzünün net fotoğraflarını yükleyin.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+
+                    idCardBlock(
+                        title: "Kimlik ön yüz",
+                        icon: "creditcard",
+                        image: idFrontImage,
+                        imageURL: effectiveFrontURL,
+                        pickerItem: $idFrontPickerItem,
+                        onRemove: { idFrontImage = nil; idFrontPickerItem = nil; clearedFront = true },
+                        onCamera: { showCameraFront = true }
+                    )
+
+                    idCardBlock(
+                        title: "Kimlik arka yüz",
+                        icon: "creditcard.fill",
+                        image: idBackImage,
+                        imageURL: effectiveBackURL,
+                        pickerItem: $idBackPickerItem,
+                        onRemove: { idBackImage = nil; idBackPickerItem = nil; clearedBack = true },
+                        onCamera: { showCameraBack = true }
+                    )
+
+                    if let err = saveError {
+                        Text(err)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 4)
+                    }
+                    Spacer().frame(height: 100)
+                }
+                .padding(20)
+            }
+            .background(Color("BackgroundColor"))
+
+            Button {
+                Task { await save() }
+            } label: {
+                HStack(spacing: 8) {
+                    if isSaving {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                        Text("Kaydet")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(canSave ? Color("PrimaryColor") : Color.gray.opacity(0.6))
+                .cornerRadius(14)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSave || isSaving)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
+        }
+        .navigationTitle("Kimlik doğrulama")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: idFrontPickerItem) { _, item in
+            Task {
+                guard let item else { return }
+                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    await MainActor.run { idFrontImage = img }
+                }
+            }
+        }
+        .onChange(of: idBackPickerItem) { _, item in
+            Task {
+                guard let item else { return }
+                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    await MainActor.run { idBackImage = img }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showCameraFront) {
+            CameraImagePicker(
+                onImagePicked: { idFrontImage = $0; showCameraFront = false },
+                onCancel: { showCameraFront = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showCameraBack) {
+            CameraImagePicker(
+                onImagePicked: { idBackImage = $0; showCameraBack = false },
+                onCancel: { showCameraBack = false }
+            )
+        }
+    }
+
+    private var canSave: Bool {
+        let hasFront = idFrontImage != nil || (effectiveFrontURL != nil && !effectiveFrontURL!.isEmpty)
+        let hasBack = idBackImage != nil || (effectiveBackURL != nil && !effectiveBackURL!.isEmpty)
+        return hasFront && hasBack
+    }
+
+    private func idCardBlock(
+        title: String,
+        icon: String,
+        image: UIImage?,
+        imageURL: String?,
+        pickerItem: Binding<PhotosPickerItem?>,
+        onRemove: @escaping () -> Void,
+        onCamera: @escaping () -> Void
+    ) -> some View {
+        let hasImage = image != nil || (imageURL != nil && !imageURL!.isEmpty)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(Color("PrimaryColor"))
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                Spacer()
+                if hasImage {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.green)
+                }
+            }
+
+            if let img = image {
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 3)
+                    }
+                    .padding(8)
+                }
+            } else if let urlString = imageURL, !urlString.isEmpty, let url = URL(string: urlString) {
+                ZStack(alignment: .topTrailing) {
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFit()
+                        } else {
+                            Rectangle()
+                                .fill(Color(.tertiarySystemBackground))
+                                .overlay(ProgressView())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 3)
+                    }
+                    .padding(8)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: pickerItem, matching: .images) {
+                        idCardButtonLabel(icon: "photo.on.rectangle.angled", title: "Galeriden seç")
+                    }
+                    Button(action: onCamera) {
+                        idCardButtonLabel(icon: "camera.fill", title: "Kamera ile çek")
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if hasImage {
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: pickerItem, matching: .images) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 14))
+                            Text("Galeriden değiştir")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color("PrimaryColor"))
+                    }
+                    Button(action: onCamera) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14))
+                            Text("Yeniden çek")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color("PrimaryColor"))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(hasImage ? Color.green.opacity(0.3) : Color.black.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func idCardButtonLabel(icon: String, title: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(Color("PrimaryColor"))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color("PrimaryColor"))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 100)
+        .background(Color("PrimaryColor").opacity(0.08))
+        .cornerRadius(12)
+    }
+
+    private func save() async {
+        saveError = nil
+        guard canSave else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            var frontURL: String? = clearedFront ? nil : profile.idFrontURL
+            var backURL: String? = clearedBack ? nil : profile.idBackURL
+            if let img = idFrontImage, let data = img.jpegData(compressionQuality: 0.85) {
+                frontURL = try await storageUpload.uploadVerificationDocument(data: data, type: .idCardFront, fileExtension: "jpg", uid: userId)
+            }
+            if let img = idBackImage, let data = img.jpegData(compressionQuality: 0.85) {
+                backURL = try await storageUpload.uploadVerificationDocument(data: data, type: .idCardBack, fileExtension: "jpg", uid: userId)
+            }
+            try await userRepo.updateExpertProfile(uid: userId, fields: [
+                "idFrontURL": frontURL ?? "",
+                "idBackURL": backURL ?? ""
+            ])
+            await onSave()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+}
+
 // MARK: - Portföy sayfası (önceki işlerden fotoğraflar)
 
 struct ExpertPortfolioPage: View {
@@ -730,6 +1089,521 @@ struct ExpertPortfolioPage: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - İşletme ve profesyonel bilgiler (düzenlenebilir)
+
+struct ExpertBusinessProfessionalEditPage: View {
+    let userId: String
+    let profile: ExpertProfile
+    var onSave: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    private let userRepo = UserRepository()
+    private let storageUpload = StorageUploadService()
+
+    @State private var businessName = ""
+    @State private var businessTypeRaw = "sahis"
+    @State private var selectedCategories: Set<String> = []
+    @State private var taxNumber = ""
+    @State private var experienceYearsText = ""
+    @State private var educationLevelRaw = EducationLevel.bachelor.rawValue
+    @State private var schoolName = ""
+    @State private var selectedExpertiseAreas: Set<String> = []
+    @State private var categorySearchText = ""
+    @State private var isCategoryExpanded = false
+    @State private var certificatePickerItems: [PhotosPickerItem] = []
+    @State private var certificateImages: [UIImage] = []
+    @State private var certificatePDFs: [Data] = []
+    @State private var showPDFImporter = false
+    @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var showSuccess = false
+
+    private var existingCertificateURLs: [String] { profile.certificateURLs }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    businessSection
+                    professionalSection
+                    certificateSection
+                    if let err = saveError {
+                        Text(err)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 4)
+                    }
+                    Spacer().frame(height: 100)
+                }
+                .padding(20)
+            }
+            .background(Color("BackgroundColor"))
+            saveButton
+        }
+        .navigationTitle("İşletme ve profesyonel bilgiler")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { bindFromProfile() }
+        .onChange(of: certificatePickerItems) { _, _ in loadCertificateImages() }
+        .fileImporter(isPresented: $showPDFImporter, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { result in
+            guard case .success(let urls) = result, let url = urls.first, url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            if let data = try? Data(contentsOf: url) { certificatePDFs.append(data) }
+        }
+        .overlay { if showSuccess { successToast } }
+    }
+
+    private var businessSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("İşletme bilgileri")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+            VStack(spacing: 12) {
+                fieldRow(icon: "building.2", label: "İşletme adı") {
+                    TextField("İşletme adı", text: $businessName)
+                        .textInputAutocapitalization(.words)
+                }
+                businessTypeRow
+                categoryPickerRow
+                fieldRow(icon: "number", label: "Vergi numarası (opsiyonel)") {
+                    TextField("Vergi numarası", text: $taxNumber)
+                        .keyboardType(.numberPad)
+                }
+            }
+            .padding(16)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(ProfileDesign.cardCorner)
+        }
+    }
+
+    private var businessTypeRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("İşletme türü")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            HStack(spacing: 12) {
+                ForEach([("sahis", "Şahıs", "person.fill"), ("sirket", "Şirket", "building.fill")], id: \.0) { raw, title, icon in
+                    Button {
+                        businessTypeRaw = raw
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: icon)
+                                .font(.system(size: 14))
+                            Text(title)
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(businessTypeRaw == raw ? .white : Color("PrimaryColor"))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(businessTypeRaw == raw ? Color("PrimaryColor") : Color(.tertiarySystemBackground))
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var categoryPickerRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isCategoryExpanded.toggle()
+                    if !isCategoryExpanded { categorySearchText = "" }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "chevron.down.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color("PrimaryColor"))
+                        .rotationEffect(.degrees(isCategoryExpanded ? 180 : 0))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hizmet kategorileri")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text(selectedCategories.isEmpty ? "Kategori seçin" : "\(selectedCategories.count) kategorisi seçildi")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if !selectedCategories.isEmpty {
+                        Text("\(selectedCategories.count)")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color("PrimaryColor"))
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(14)
+                .background(Color(.tertiarySystemBackground))
+                .cornerRadius(14)
+            }
+            .buttonStyle(.plain)
+            if isCategoryExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Kategori ara...", text: $categorySearchText)
+                        .font(.system(size: 14))
+                        .padding(12)
+                        .background(Color(.tertiarySystemBackground))
+                        .cornerRadius(10)
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 6) {
+                            ForEach(filteredCategories) { cat in
+                                Button {
+                                    if selectedCategories.contains(cat.name) {
+                                        selectedCategories.remove(cat.name)
+                                    } else {
+                                        selectedCategories.insert(cat.name)
+                                    }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: cat.icon)
+                                            .font(.system(size: 16))
+                                            .foregroundColor(selectedCategories.contains(cat.name) ? .white : Color("PrimaryColor"))
+                                            .frame(width: 28)
+                                        Text(cat.name)
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(selectedCategories.contains(cat.name) ? .white : .primary)
+                                        Spacer()
+                                        Image(systemName: selectedCategories.contains(cat.name) ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(selectedCategories.contains(cat.name) ? .white : .secondary)
+                                    }
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 12)
+                                    .background(selectedCategories.contains(cat.name) ? Color("PrimaryColor") : Color(.tertiarySystemBackground))
+                                    .cornerRadius(10)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .frame(maxHeight: 220)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    private var filteredCategories: [ServiceCategory] {
+        let q = categorySearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty { return ServiceCategory.allCategories }
+        return ServiceCategory.allCategories.filter { $0.name.lowercased().contains(q) }
+    }
+
+    private var professionalSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Profesyonel bilgiler")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+            VStack(spacing: 12) {
+                fieldRow(icon: "calendar", label: "Deneyim yılı") {
+                    TextField("Örn: 5", text: $experienceYearsText)
+                        .keyboardType(.numberPad)
+                }
+                educationRow
+                fieldRow(icon: "building.columns", label: "Okul / kurum adı") {
+                    TextField("Okul veya kurum adı", text: $schoolName)
+                        .textInputAutocapitalization(.words)
+                }
+                expertiseRow
+            }
+            .padding(16)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(ProfileDesign.cardCorner)
+        }
+    }
+
+    private var educationRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Eğitim düzeyi")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(EducationLevel.allCases, id: \.rawValue) { level in
+                        Button {
+                            educationLevelRaw = level.rawValue
+                        } label: {
+                            Text(level.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(educationLevelRaw == level.rawValue ? .white : .primary)
+                                .padding(.horizontal, 14)
+                                .frame(height: 36)
+                                .background(educationLevelRaw == level.rawValue ? Color("PrimaryColor") : Color(.tertiarySystemBackground))
+                                .cornerRadius(18)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var expertiseRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Uzmanlık alanları")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            if selectedCategories.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.orange)
+                    Text("Önce hizmet kategorisi seçin")
+                        .font(.system(size: 13))
+                        .foregroundColor(.orange)
+                }
+                .padding(.vertical, 8)
+            } else {
+                let areas = ExpertiseArea.areas(for: selectedCategories)
+                FlowLayout(spacing: 6) {
+                    ForEach(areas) { area in
+                        Button {
+                            if selectedExpertiseAreas.contains(area.name) {
+                                selectedExpertiseAreas.remove(area.name)
+                            } else {
+                                selectedExpertiseAreas.insert(area.name)
+                            }
+                        } label: {
+                            Text(area.name)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(selectedExpertiseAreas.contains(area.name) ? .white : .primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(selectedExpertiseAreas.contains(area.name) ? Color("PrimaryColor") : Color(.tertiarySystemBackground))
+                                .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var certificateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sertifikalar (opsiyonel)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+            if !existingCertificateURLs.isEmpty {
+                Text("\(existingCertificateURLs.count) sertifika kayıtlı")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            if !certificateImages.isEmpty || !certificatePDFs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(certificateImages.indices, id: \.self) { i in
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: certificateImages[i])
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                Button {
+                                    certificateImages.remove(at: i)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.white)
+                                        .shadow(radius: 2)
+                                }
+                                .offset(x: 4, y: -4)
+                            }
+                        }
+                        ForEach(certificatePDFs.indices, id: \.self) { i in
+                            ZStack(alignment: .topTrailing) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "doc.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(Color("PrimaryColor"))
+                                    Text("PDF \(i + 1)")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(width: 80, height: 80)
+                                .background(Color("PrimaryColor").opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                Button {
+                                    certificatePDFs.remove(at: i)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.white)
+                                        .shadow(radius: 2)
+                                }
+                                .offset(x: 4, y: -4)
+                            }
+                        }
+                    }
+                }
+            }
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $certificatePickerItems, maxSelectionCount: 10, matching: .images) {
+                    labelWithIcon(icon: "photo.badge.plus", title: "Fotoğraf ekle")
+                }
+                Button {
+                    showPDFImporter = true
+                } label: {
+                    labelWithIcon(icon: "doc.badge.plus", title: "PDF ekle")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(ProfileDesign.cardCorner)
+    }
+
+    private func labelWithIcon(icon: String, title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+        }
+        .foregroundColor(Color("PrimaryColor"))
+        .frame(maxWidth: .infinity)
+        .frame(height: 46)
+        .background(Color("PrimaryColor").opacity(0.08))
+        .cornerRadius(12)
+    }
+
+    private func fieldRow<Content: View>(icon: String, label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(Color("PrimaryColor"))
+                    .frame(width: 24)
+                content()
+                    .font(.system(size: 15))
+            }
+            .padding(12)
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(12)
+        }
+    }
+
+    private var saveButton: some View {
+        Button {
+            Task { await save() }
+        } label: {
+            HStack(spacing: 8) {
+                if isSaving {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                    Text("Kaydet")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(canSave ? Color("PrimaryColor") : Color.gray)
+            .cornerRadius(14)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSave || isSaving)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 24)
+    }
+
+    private var canSave: Bool {
+        !businessName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !selectedCategories.isEmpty
+            && !businessTypeRaw.isEmpty
+            && (Int(experienceYearsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) >= 0
+            && !educationLevelRaw.isEmpty
+            && !schoolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var successToast: some View {
+        Text("Kaydedildi")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.green)
+            .cornerRadius(12)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { showSuccess = false }
+            }
+    }
+
+    private func bindFromProfile() {
+        businessName = profile.businessName
+        businessTypeRaw = profile.businessType.isEmpty ? "sahis" : profile.businessType
+        selectedCategories = Set(profile.serviceCategories)
+        taxNumber = profile.taxNumber ?? ""
+        experienceYearsText = profile.experienceYears > 0 ? "\(profile.experienceYears)" : ""
+        educationLevelRaw = profile.educationLevel.isEmpty ? EducationLevel.bachelor.rawValue : profile.educationLevel
+        schoolName = profile.schoolName
+        selectedExpertiseAreas = Set(profile.expertiseAreas)
+    }
+
+    private func loadCertificateImages() {
+        Task {
+            var images: [UIImage] = []
+            for item in certificatePickerItems {
+                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    images.append(img)
+                }
+            }
+            await MainActor.run { certificateImages = images }
+        }
+    }
+
+    private func save() async {
+        saveError = nil
+        guard canSave else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            var newURLs: [String] = []
+            for img in certificateImages {
+                let url = try await storageUpload.uploadCertificate(image: img, quality: 0.85, uid: userId)
+                newURLs.append(url)
+            }
+            for pdfData in certificatePDFs {
+                let url = try await storageUpload.uploadCertificate(data: pdfData, fileExtension: "pdf", uid: userId)
+                newURLs.append(url)
+            }
+            let allCertURLs = existingCertificateURLs + newURLs
+            let years = Int(experienceYearsText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            var fields: [String: Any] = [
+                "businessName": businessName.trimmingCharacters(in: .whitespacesAndNewlines),
+                "businessType": businessTypeRaw,
+                "serviceCategories": Array(selectedCategories),
+                "taxNumber": taxNumber.trimmingCharacters(in: .whitespacesAndNewlines),
+                "experienceYears": years,
+                "educationLevel": educationLevelRaw,
+                "schoolName": schoolName.trimmingCharacters(in: .whitespacesAndNewlines),
+                "expertiseAreas": Array(selectedExpertiseAreas),
+                "certificateURLs": allCertURLs
+            ]
+            try await userRepo.updateExpertProfile(uid: userId, fields: fields)
+            showSuccess = true
+            await onSave()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 }

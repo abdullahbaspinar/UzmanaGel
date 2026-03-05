@@ -15,7 +15,7 @@ final class ServiceDetailViewModel: ObservableObject {
     @Published var addressText: String = ""
     @Published var isFavorite: Bool
     @Published var isLoading = false
-    /// Uzmanın çalışma saatleri / günleri (expert_profiles'tan; müşteri tarafında gösterilir)
+    /// Uzmanın çalışma saatleri / günleri (service_providers'dan; müşteri tarafında gösterilir)
     @Published var expertProfile: ExpertProfile?
 
     let service: Service
@@ -108,7 +108,7 @@ final class ServiceDetailViewModel: ObservableObject {
         }
     }
 
-    /// Portföy: uzmanın expert_profiles.portfolioImageURLs değerini kullan; tüm ilanlarda aynı portföy gösterilir.
+    /// Portföy: uzmanın service_providers.portfolioImageURLs değerini kullan; tüm ilanlarda aynı portföy gösterilir.
     private func fetchGalleryImages() async {
         if !service.image.isEmpty, let url = URL(string: service.image) {
             coverImageURL = url

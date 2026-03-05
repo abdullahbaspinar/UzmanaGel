@@ -29,30 +29,26 @@ struct ExpertSignUpView: View {
             VStack(spacing: 0) {
                 headerSection
                 stepIndicator
-                    .padding(.top, 8)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        switch vm.currentStep {
-                        case 1:
-                            step1BasicInfo
-                        case 2:
-                            step2BusinessInfo
-                        case 3:
-                            step3ProfessionalInfo
-                        case 4:
-                            step4IdVerification
-                        default:
-                            EmptyView()
+                    VStack(spacing: 20) {
+                        // Sadece 1. adım: temel bilgiler. 2–4. adımlar giriş sonrası Profil’den tamamlanır.
+                        step1BasicInfo
+                        if !vm.phoneVerified {
+                            navigationButtons
+                                .padding(.top, 4)
+                        } else if vm.isLoading {
+                            Text("Hesabınız oluşturuluyor...")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.top, 12)
                         }
-
-                        navigationButtons
-                            .padding(.top, 8)
-
-                        Spacer().frame(height: 40)
+                        Spacer().frame(height: 32)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
                 }
             }
 
@@ -87,7 +83,13 @@ struct ExpertSignUpView: View {
             }
         }
         .onChange(of: vm.phoneVerified) { _, verified in
-            if verified { showSmsVerificationSheet = false }
+            if verified {
+                showSmsVerificationSheet = false
+                // SMS onayı sonrası direkt kayıt olup uzman anasayfasına yönlendir
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    vm.submitApplication()
+                }
+            }
         }
         .sheet(isPresented: $showSmsVerificationSheet) {
             SmsVerificationSheetView(vm: vm, isPresented: $showSmsVerificationSheet)
@@ -148,82 +150,51 @@ struct ExpertSignUpView: View {
 private extension ExpertSignUpView {
 
     var headerSection: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: "star.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color("TertiaryColor"))
-
-                Text("Uzman Başvurusu")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.primary)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color("PrimaryColor").opacity(0.12))
+                        .frame(width: 52, height: 52)
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(Color("PrimaryColor"))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Uzman Başvurusu")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    Text("Temel bilgilerinizi girin, ardından telefonunuzu doğrulayın.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer()
             }
-            .padding(.top, 12)
-
-            Text(stepTitle)
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-                .padding(.top, 2)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
         }
+        .background(Color(.secondarySystemBackground).opacity(0.6))
     }
 
-    var stepTitle: String {
-        switch vm.currentStep {
-        case 1: return "Temel Bilgilerinizi Girin"
-        case 2: return "İşletme Bilgilerinizi Girin"
-        case 3: return "Profesyonel Bilgilerinizi Girin"
-        case 4: return "Kimlik Doğrulama"
-        default: return ""
-        }
-    }
+    var stepTitle: String { "Temel Bilgilerinizi Girin" }
 
     var stepIndicator: some View {
         HStack(spacing: 8) {
-            ForEach(1...vm.totalSteps, id: \.self) { step in
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(step <= vm.currentStep ? Color("PrimaryColor") : Color(.systemGray4))
-                            .frame(width: 32, height: 32)
-
-                        if step < vm.currentStep {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                        } else {
-                            Text("\(step)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(step == vm.currentStep ? .white : .secondary)
-                        }
-                    }
-
-                    Text(stepLabel(for: step))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(step <= vm.currentStep ? Color("PrimaryColor") : .secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
-
-                if step < vm.totalSteps {
-                    Rectangle()
-                        .fill(step < vm.currentStep ? Color("PrimaryColor") : Color(.systemGray4))
-                        .frame(height: 2)
-                        .frame(maxWidth: 28)
-                        .offset(y: -10)
-                }
-            }
+            Text("Adım 1")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color("PrimaryColor"))
+                .clipShape(Capsule())
+            Text("Temel bilgiler")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            Spacer()
         }
-        .padding(.horizontal, 32)
-    }
-
-    func stepLabel(for step: Int) -> String {
-        switch step {
-        case 1: return "Temel"
-        case 2: return "İşletme"
-        case 3: return "Profesyonel"
-        case 4: return "Kimlik"
-        default: return ""
-        }
+        .padding(.horizontal, 20)
     }
 }
 
@@ -232,37 +203,51 @@ private extension ExpertSignUpView {
 private extension ExpertSignUpView {
 
     var step1BasicInfo: some View {
-        VStack(spacing: 12) {
-            inputField(icon: "person", placeholder: "Ad Soyad") {
-                TextField("Ad Soyad", text: $vm.fullName)
-                    .textInputAutocapitalization(.words)
-                    .autocorrectionDisabled()
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(spacing: 14) {
+                Text("Kişisel bilgiler")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                inputField(icon: "person.fill", placeholder: "Ad Soyad") {
+                    TextField("Ad Soyad", text: $vm.fullName)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                }
+                inputField(icon: "envelope.fill", placeholder: "E-posta") {
+                    TextField("E-posta", text: $vm.email)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                inputField(icon: "phone.fill", placeholder: "Telefon (5XX XXX XX XX)") {
+                    TextField("Telefon (5XX XXX XX XX)", text: $vm.phone)
+                        .keyboardType(.phonePad)
+                        .autocorrectionDisabled()
+                }
+                phoneVerificationSection
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.black.opacity(0.06), lineWidth: 1))
 
-            inputField(icon: "envelope", placeholder: "E-posta") {
-                TextField("E-posta", text: $vm.email)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+            VStack(spacing: 14) {
+                Text("Şifre")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                passwordField
+                confirmPasswordField
+                if !vm.password.isEmpty { passwordRequirementsView }
+                passwordHintsView
             }
-
-            inputField(icon: "phone", placeholder: "Telefon (5XX XXX XX XX)") {
-                TextField("Telefon (5XX XXX XX XX)", text: $vm.phone)
-                    .keyboardType(.phonePad)
-                    .autocorrectionDisabled()
-            }
-
-            phoneVerificationSection
-
-            passwordField
-
-            confirmPasswordField
-
-            if !vm.password.isEmpty {
-                passwordRequirementsView
-            }
-
-            passwordHintsView
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.black.opacity(0.06), lineWidth: 1))
 
             kvkkSection
         }
@@ -458,7 +443,7 @@ private extension ExpertSignUpView {
     }
 
     var kvkkSection: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             Button {
                 if hasReadKvkk {
                     vm.kvkkAccepted.toggle()
@@ -471,34 +456,24 @@ private extension ExpertSignUpView {
                     .foregroundColor(hasReadKvkk ? Color("PrimaryColor") : .secondary)
             }
             .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Button {
-                    showKvkkSheet = true
-                } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Button { showKvkkSheet = true } label: {
                     Text("Kullanım şartları ve gizlilik politikası")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.blue)
-                        .italic()
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color("PrimaryColor"))
                 }
                 .buttonStyle(.plain)
-
-                Text("okudum, onaylıyorum.")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color("SecondaryColor"))
+                Text("Okudum, onaylıyorum.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
             }
-
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity)
-        .frame(height: 52)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
-        .cornerRadius(14)
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.black.opacity(0.06), lineWidth: 1))
         .sheet(isPresented: $showKvkkSheet) {
             Kvkk(hasRead: $hasReadKvkk)
                 .presentationDetents([.large])
@@ -546,75 +521,85 @@ struct SmsVerificationSheetView: View {
             ZStack {
                 Color("BackgroundColor").ignoresSafeArea()
 
-                VStack(spacing: 24) {
+                VStack(spacing: 28) {
                     if !vm.didSendCode && vm.isLoading {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 16) {
                             ProgressView()
-                                .scaleEffect(1.2)
+                                .scaleEffect(1.3)
+                                .tint(Color("PrimaryColor"))
                             Text("SMS kodu gönderiliyor...")
-                                .font(.system(size: 15))
+                                .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                        .padding(.top, 48)
                     } else {
-                        Text("\(formattedPhone()) numarasına gönderilen 6 haneli kodu girin.")
-                            .font(.system(size: 15))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                        VStack(spacing: 8) {
+                            Image(systemName: "message.badge.filled.fill")
+                                .font(.system(size: 44))
+                                .foregroundColor(Color("PrimaryColor").opacity(0.9))
+                            Text(formattedPhone())
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.primary)
+                            Text("Bu numaraya gönderilen 6 haneli kodu girin.")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 24)
+                        }
+                        .padding(.top, 8)
                     }
 
                     if vm.didSendCode || vm.errorMessage != nil {
-                        VStack(spacing: 12) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "number")
-                                    .foregroundColor(.secondary)
-                                TextField("6 haneli kod", text: $vm.smsCode)
-                                    .keyboardType(.numberPad)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .onChange(of: vm.smsCode) { _, _ in vm.clearError() }
-                            }
-                            .padding(14)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(14)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color(white: 0, opacity: 0.08), lineWidth: 1)
-                            )
+                        VStack(spacing: 16) {
+                            TextField("000000", text: $vm.smsCode)
+                                .keyboardType(.numberPad)
+                                .textInputAutocapitalization(.never)
+                                .multilineTextAlignment(.center)
+                                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                                .onChange(of: vm.smsCode) { _, _ in vm.clearError() }
+                                .padding(18)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(14)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color("PrimaryColor").opacity(0.3), lineWidth: 1.5)
+                                )
 
                             if let error = vm.errorMessage {
                                 HStack(spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 14))
                                         .foregroundColor(.red)
                                     Text(error)
-                                        .font(.system(size: 13))
+                                        .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(.red)
                                         .multilineTextAlignment(.leading)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(12)
-                                .background(Color.red.opacity(0.08))
-                                .cornerRadius(10)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(12)
                             }
 
                             Button {
                                 vm.verifyPhoneCode()
                             } label: {
-                                HStack {
+                                HStack(spacing: 8) {
                                     if vm.isLoading {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     } else {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 18))
                                         Text("Doğrula")
+                                            .font(.system(size: 16, weight: .semibold))
                                     }
                                 }
-                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 52)
-                                .background(vm.smsCode.filter(\.isNumber).count == 6 ? Color("PrimaryColor") : Color.gray)
+                                .background(vm.smsCode.filter(\.isNumber).count == 6 ? Color("PrimaryColor") : Color.gray.opacity(0.6))
                                 .cornerRadius(14)
                             }
                             .buttonStyle(.plain)
@@ -622,7 +607,7 @@ struct SmsVerificationSheetView: View {
 
                             if vm.resendCountdown > 0 {
                                 Text("Tekrar kod gönder (\(vm.resendCountdown)s)")
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.secondary)
                             } else {
                                 Button {
@@ -637,11 +622,12 @@ struct SmsVerificationSheetView: View {
                             }
                         }
                         .padding(.horizontal, 24)
+                        .padding(.top, 8)
                     }
 
                     Spacer()
                 }
-                .padding(.top, 20)
+                .padding(.top, 16)
             }
             .navigationTitle("SMS Doğrulama")
             .navigationBarTitleDisplayMode(.inline)
@@ -650,6 +636,7 @@ struct SmsVerificationSheetView: View {
                     Button("Kapat") {
                         isPresented = false
                     }
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color("PrimaryColor"))
                 }
             }
@@ -1287,69 +1274,35 @@ private extension ExpertSignUpView {
 private extension ExpertSignUpView {
 
     var navigationButtons: some View {
-        HStack(spacing: 12) {
-            if vm.currentStep > 1 {
-                Button {
-                    vm.previousStep()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("GERİ")
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    .foregroundColor(Color("PrimaryColor"))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(Color("PrimaryColor").opacity(0.08))
-                    .cornerRadius(14)
-                }
-                .buttonStyle(.plain)
+        Button {
+            if vm.currentStep == 1 && !vm.phoneVerified && vm.isStep1FieldsFilled {
+                showSmsVerificationSheet = true
             }
-
-            Button {
-                if vm.currentStep == 1 && !vm.phoneVerified && vm.isStep1FieldsFilled {
-                    showSmsVerificationSheet = true
+            vm.nextStep()
+        } label: {
+            HStack(spacing: 8) {
+                if vm.phoneVerified {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                } else {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 15, weight: .semibold))
                 }
-                vm.nextStep()
-            } label: {
-                HStack(spacing: 6) {
-                    Text(vm.currentStep == vm.totalSteps ? "BAŞVURU YAP" : "İLERİ")
-                        .font(.system(size: 15, weight: .bold))
-
-                    if vm.currentStep < vm.totalSteps {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .bold))
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 13, weight: .bold))
-                    }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(forwardButtonEnabled ? Color("TertiaryColor") : Color.gray)
-                .cornerRadius(14)
-                .shadow(radius: 6, y: 3)
+                Text(vm.phoneVerified ? "KAYIT OL" : (vm.isStep1FieldsFilled ? "Devam – SMS kodu al" : "Devam"))
+                    .font(.system(size: 16, weight: .semibold))
             }
-            .buttonStyle(.plain)
-            .disabled(!forwardButtonEnabled)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(forwardButtonEnabled ? Color("PrimaryColor") : Color.gray.opacity(0.6))
+            .cornerRadius(14)
         }
+        .buttonStyle(.plain)
+        .disabled(!forwardButtonEnabled)
     }
 
     private var forwardButtonEnabled: Bool {
-        switch vm.currentStep {
-        case 1:
-            return vm.isStep1FieldsFilled
-        case 2:
-            return vm.isStep2Valid
-        case 3:
-            return vm.isStep3Valid
-        case 4:
-            return vm.isStep4Valid
-        default:
-            return true
-        }
+        vm.isStep1FieldsFilled
     }
 }
 
@@ -1358,21 +1311,22 @@ private extension ExpertSignUpView {
 private extension ExpertSignUpView {
 
     func inputField<Content: View>(icon: String, placeholder: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.secondary)
-                .frame(width: 22)
-
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(Color("PrimaryColor").opacity(0.8))
+                .frame(width: 24, alignment: .center)
             content()
+                .font(.system(size: 16))
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .frame(height: 52)
-        .background(Color(.secondarySystemBackground))
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
-        .cornerRadius(14)
     }
 
     var loadingOverlay: some View {

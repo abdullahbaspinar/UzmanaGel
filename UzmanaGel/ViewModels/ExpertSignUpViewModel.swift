@@ -8,10 +8,10 @@ import PhotosUI
 @MainActor
 final class ExpertSignUpViewModel: ObservableObject {
 
-    // MARK: - Step Tracking
+    // MARK: - Step Tracking (sadece 1. adım: temel bilgiler; 2–4. adımlar profilden tamamlanır)
 
     @Published var currentStep = 1
-    let totalSteps = 4
+    let totalSteps = 1
 
     // MARK: - Step 1: Temel Bilgiler
 
@@ -83,14 +83,10 @@ final class ExpertSignUpViewModel: ObservableObject {
             return
         }
 
-        guard validateCurrentStep() else { return }
+        guard validateStep1() else { return }
 
         withAnimation(.easeInOut(duration: 0.3)) {
-            if currentStep < totalSteps {
-                currentStep += 1
-            } else {
-                submitApplication()
-            }
+            submitApplication()
         }
     }
 
@@ -537,10 +533,11 @@ final class ExpertSignUpViewModel: ObservableObject {
         certificatePDFs.remove(at: index)
     }
 
-    // MARK: - Submit
+    // MARK: - Submit (sadece 1. adım: users + service_providers minimal; 2–4. adımlar profilden tamamlanır)
 
     func submitApplication() {
-        guard validateStep1(), validateStep2(), validateStep3(), validateStep4() else { return }
+        guard !didSignUp else { return }
+        guard validateStep1() else { return }
 
         isLoading = true
         errorMessage = nil
@@ -548,10 +545,6 @@ final class ExpertSignUpViewModel: ObservableObject {
         let trimmedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines).filter(\.isNumber)
-        let trimmedBusiness = businessName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let years = Int(experienceYears.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-        let trimmedSchool = schoolName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTax = taxNumber.trimmingCharacters(in: .whitespacesAndNewlines)
 
         Task {
             let user: FirebaseAuth.User
@@ -618,80 +611,16 @@ final class ExpertSignUpViewModel: ObservableObject {
                 return
             }
 
-            let uid = user.uid
-            var idFrontURL: String?
-            var idBackURL: String?
-            var certificateURLs: [String] = []
-
-            guard let front = idFrontImage, let frontData = front.jpegData(compressionQuality: 0.85) else {
-                isLoading = false
-                errorMessage = "Kimlik ön yüz görseli alınamadı."
-                return
-            }
             do {
-                idFrontURL = try await storageUpload.uploadVerificationDocument(data: frontData, type: .idCardFront, fileExtension: "jpg", uid: uid)
+                try await userRepo.createMinimalServiceProvider(
+                    uid: user.uid,
+                    displayName: trimmedName,
+                    email: trimmedEmail,
+                    phoneNumber: trimmedPhone
+                )
             } catch {
                 isLoading = false
-                errorMessage = "Kimlik ön yüz yüklenemedi: \(error.localizedDescription)"
-                return
-            }
-
-            guard let back = idBackImage, let backData = back.jpegData(compressionQuality: 0.85) else {
-                isLoading = false
-                errorMessage = "Kimlik arka yüz görseli alınamadı."
-                return
-            }
-            do {
-                idBackURL = try await storageUpload.uploadVerificationDocument(data: backData, type: .idCardBack, fileExtension: "jpg", uid: uid)
-            } catch {
-                isLoading = false
-                errorMessage = "Kimlik arka yüz yüklenemedi: \(error.localizedDescription)"
-                return
-            }
-
-            for image in certificateImages {
-                do {
-                    let url = try await storageUpload.uploadCertificate(image: image, quality: 0.85, uid: uid)
-                    certificateURLs.append(url)
-                } catch {
-                    isLoading = false
-                    errorMessage = "Sertifika yüklenemedi: \(error.localizedDescription)"
-                    return
-                }
-            }
-            for pdfData in certificatePDFs {
-                do {
-                    let url = try await storageUpload.uploadCertificate(data: pdfData, fileExtension: "pdf", uid: uid)
-                    certificateURLs.append(url)
-                } catch {
-                    isLoading = false
-                    errorMessage = "Sertifika PDF yüklenemedi: \(error.localizedDescription)"
-                    return
-                }
-            }
-
-            var profileData: [String: Any] = [
-                "displayName": trimmedName,
-                "email": trimmedEmail,
-                "phoneNumber": trimmedPhone,
-                "businessName": trimmedBusiness,
-                "serviceCategories": Array(selectedCategories),
-                "businessType": businessType.rawValue,
-                "taxNumber": trimmedTax,
-                "experienceYears": years,
-                "expertiseAreas": Array(selectedExpertiseAreas),
-                "educationLevel": educationLevel.rawValue,
-                "schoolName": trimmedSchool,
-                "certificateURLs": certificateURLs
-            ]
-            if let url = idFrontURL { profileData["idFrontURL"] = url }
-            if let url = idBackURL { profileData["idBackURL"] = url }
-
-            do {
-                try await userRepo.createExpertProfile(uid: user.uid, profile: profileData)
-            } catch {
-                isLoading = false
-                errorMessage = "Uzman profili kaydedilirken hata oluştu. Giriş yaparak profilinizi tamamlayabilirsiniz."
+                errorMessage = "Uzman kaydı tamamlanırken hata oluştu. Giriş yaparak Profilim üzerinden tamamlayabilirsiniz."
                 didSignUp = true
                 return
             }

@@ -69,6 +69,11 @@ struct ExpertProfile: Codable, Identifiable {
     /// Konum (harita / navigasyon için; adres kaydedilirken geocode ile doldurulur)
     var locationGeo: GeoPoint?
 
+    /// Kimlik belgesi ön yüz (Storage URL)
+    var idFrontURL: String?
+    /// Kimlik belgesi arka yüz (Storage URL)
+    var idBackURL: String?
+
     enum CodingKeys: String, CodingKey {
         case displayName, email, phoneNumber, businessName, serviceCategories
         case businessType, taxNumber, experienceYears, expertiseAreas, certificateURLs
@@ -79,6 +84,7 @@ struct ExpertProfile: Codable, Identifiable {
         case portfolioImageURLs
         case address, about
         case locationGeo
+        case idFrontURL, idBackURL
     }
 
     init(from decoder: Decoder) throws {
@@ -122,9 +128,11 @@ struct ExpertProfile: Codable, Identifiable {
         address = try c.decodeIfPresent(String.self, forKey: .address)
         about = try c.decodeIfPresent(String.self, forKey: .about)
         locationGeo = try c.decodeIfPresent(GeoPoint.self, forKey: .locationGeo)
+        idFrontURL = try c.decodeIfPresent(String.self, forKey: .idFrontURL)
+        idBackURL = try c.decodeIfPresent(String.self, forKey: .idBackURL)
     }
 
-    init(id: String?, displayName: String, email: String, phoneNumber: String, businessName: String, serviceCategories: [String], businessType: String, taxNumber: String?, experienceYears: Int, expertiseAreas: [String], certificateURLs: [String], educationLevel: String, schoolName: String, status: String, createdAt: Timestamp?, profileImageURL: String? = nil, serviceCities: [String] = [], workingDays: [String] = [], workingHoursStart: String? = nil, workingHoursEnd: String? = nil, minPrice: Int? = nil, maxPrice: Int? = nil, serviceType: String? = nil, bankName: String? = nil, iban: String? = nil, accountHolderName: String? = nil, portfolioImageURLs: [String] = [], address: String? = nil, about: String? = nil, locationGeo: GeoPoint? = nil) {
+    init(id: String?, displayName: String, email: String, phoneNumber: String, businessName: String, serviceCategories: [String], businessType: String, taxNumber: String?, experienceYears: Int, expertiseAreas: [String], certificateURLs: [String], educationLevel: String, schoolName: String, status: String, createdAt: Timestamp?, profileImageURL: String? = nil, serviceCities: [String] = [], workingDays: [String] = [], workingHoursStart: String? = nil, workingHoursEnd: String? = nil, minPrice: Int? = nil, maxPrice: Int? = nil, serviceType: String? = nil, bankName: String? = nil, iban: String? = nil, accountHolderName: String? = nil, portfolioImageURLs: [String] = [], address: String? = nil, about: String? = nil, locationGeo: GeoPoint? = nil, idFrontURL: String? = nil, idBackURL: String? = nil) {
         self.id = id
         self.displayName = displayName
         self.email = email
@@ -155,6 +163,8 @@ struct ExpertProfile: Codable, Identifiable {
         self.address = address
         self.about = about
         self.locationGeo = locationGeo
+        self.idFrontURL = idFrontURL
+        self.idBackURL = idBackURL
     }
 
     /// Admin tarafından onaylanmış mı
@@ -163,10 +173,10 @@ struct ExpertProfile: Codable, Identifiable {
         return s == "approved" || s == "onaylandı"
     }
 
-    /// İlan açabilmek için profil %100 dolu ve başvuru onaylanmış olmalı. 22 alan (adres, hakkında dahil).
+    /// İlan açabilmek için profil %100 dolu ve başvuru onaylanmış olmalı. 24 alan (adres, hakkında, kimlik ön/arka dahil).
     var profileCompletionPercentage: Int {
         var filled = 0
-        let total = 22
+        let total = 24
         if !displayName.isEmpty { filled += 1 }
         if !email.isEmpty { filled += 1 }
         if !phoneNumber.isEmpty { filled += 1 }
@@ -189,6 +199,8 @@ struct ExpertProfile: Codable, Identifiable {
         if let a = accountHolderName, !a.isEmpty { filled += 1 }
         if let addr = address, !addr.isEmpty { filled += 1 }
         if let ab = about, !ab.isEmpty { filled += 1 }
+        if let f = idFrontURL, !f.isEmpty { filled += 1 }
+        if let b = idBackURL, !b.isEmpty { filled += 1 }
         return min(100, (filled * 100) / total)
     }
 
